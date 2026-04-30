@@ -26,6 +26,8 @@ def split_by_class(df, class_col):
     df_dict = {}
     outcome_classes = df[class_col].dropna().unique()
     
+    df_dict['Total'] = df
+
     for cls in outcome_classes:
         df_subset = df.loc[df[class_col] == cls]
         df_dict[cls] = df_subset
