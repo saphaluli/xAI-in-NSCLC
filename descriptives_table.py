@@ -22,16 +22,18 @@ def variable_selection(df, class_col):
     return cat_var, cont_var, outcome_classes
 
 # split dataset by class
-def split_by_class(df, class_col, outcome_classes):
-    df_list = []
+def split_by_class(df, class_col):
+    df_dict = {}
+    outcome_classes = df[class_col].dropna().unique()
+    
     for cls in outcome_classes:
         df_subset = df.loc[df[class_col] == cls]
-        df_list.append(df_subset)
+        df_dict[cls] = df_subset
 
-    return df_list
+    return df_dict
 
 def calc_metrics(df, cat_var, cont_var):
-
+    
     metrics_dict = {}
     
     for var in cat_var:
@@ -40,6 +42,7 @@ def calc_metrics(df, cat_var, cont_var):
         subclasses.sort()
 
         var_metrics = []
+
 
         for cls in subclasses:
             
@@ -59,17 +62,17 @@ def calc_metrics(df, cat_var, cont_var):
         mean = df[var].mean()
         std = df[var].std()
 
-        var_metrics = [(('{} ± {}'.format(round(mean, 2), round(std, 2))))]
+        var_metrics = [(None, ('{} ± {}'.format(round(mean, 2), round(std, 2))))]
 
         metrics_dict[var] = var_metrics
 
-    return metrics_dict
+    return metrics_dict   
 
-
-
-
-
+def metrics_to_df(metrics_dict, column_name):
+    rows = []
+    for variable, entries in metrics_dict.items():
+        for level, metric in entries:
+            rows.append((variable, level, metric))
     
-
-        
-        
+    df = pd.DataFrame(rows, columns=["variable", "level", column_name])
+    return df.set_index(["variable", "level"])   
