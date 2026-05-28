@@ -4,3 +4,4 @@ Table_1.csv
 .DS_Store
 path_records.csv
 *.csv
+__pycache__/utils_pyradiomics.cpython-310.pyc
