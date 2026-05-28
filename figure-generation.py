@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
-from descriptives_table import variable_selection, split_by_class, calc_metrics, metrics_to_df
+from utils_descriptives import variable_selection, split_by_class, calc_metrics, metrics_to_df
 
 
 dir_path = os.path.expanduser('~/Documents/NSCLC-Radiomics-Lung1.clinical-version3-Oct-2019.csv')
