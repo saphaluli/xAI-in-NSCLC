@@ -21,6 +21,9 @@ def create_path_df(general_dir):
     path_records = []
 
     for patient_dir in general_dir.iterdir():
+        if not patient_dir.is_dir():
+            continue
+
         scan_id = patient_dir.name
         
         for study_dir in patient_dir.iterdir():
@@ -70,7 +73,7 @@ def extract_slice(img, slice_no):
 def initialize_feature_extractor():
     paramsFile = "CEM_extraction.yaml"
     extractor = featureextractor.RadiomicsFeatureExtractor(paramsFile, shape2D=True, force2D=True,
-                                                               force2Ddimension=True, resampledPixelSpacing=None)
+                                                            force2Ddimension=True, resampledPixelSpacing=None)
     extractor.addProvenance(False)
     extractor.disableAllFeatures()
     extractor.enableImageTypes(Original={})
@@ -101,7 +104,7 @@ def extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records):
 
         features = extractor.execute(img_slice, seg_slice, label=1)
         record = {'PatientID': scan_id,
-                  'slice_no': slice_no}
+                'slice_no': slice_no}
         
         record.update(features)
         records.append(record)
@@ -127,6 +130,8 @@ def extract_radiomics(path_df):
         scan_id = row['scan_id']
         ct_path = row['path_ct']
         mask_path = row['path_mask']
+
+        print(f'started processing scan: {scan_id}')
 
         # read segmentation file, read ct scan as series
         seg = pydicom.dcmread(list(mask_path.glob('*.dcm'))[0])
@@ -161,6 +166,8 @@ def extract_radiomics(path_df):
 
             #per-slice radiomics extraction
             records = extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records)
+
+        print(f'finished processing scan: {scan_id}')
 
     return pd.DataFrame(records), mismatched_scans
 

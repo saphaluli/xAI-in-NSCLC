@@ -5,3 +5,7 @@ Table_1.csv
 path_records.csv
 *.csv
 __pycache__/utils_pyradiomics.cpython-310.pyc
+NSCLC-Radiomics
+python
+.venv
+__pycache__
