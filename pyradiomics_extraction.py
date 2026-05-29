@@ -26,6 +26,7 @@ path_csv_dir = None
 #    path_df = pd.read_csv(path_csv_dir)
 #else:
 path_df = create_path_df(general_dir)
+path_df = path_df.sort_values(by='scan_id', ascending=True)
 
 start = time.time()
 features, mismatched_scans = extract_radiomics(path_df)
@@ -38,6 +39,3 @@ records_df = pd.DataFrame(features)
 print(f'time elapsed: {(end - start) / 60:.2f} minutes')
 print('mismatched scan list: ', mismatched_scans)
 records_df.to_csv('FULL_radiomics_features_per_slice.csv', index=False)
-
-
-
