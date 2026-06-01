@@ -8,6 +8,7 @@ import pydicom
 import pydicom_seg as dcmseg
 from radiomics import featureextractor
 import pandas as pd
+from tqdm import tqdm
 import sklearn
 from sklearn.feature_selection import VarianceThreshold
 
@@ -126,7 +127,7 @@ def extract_radiomics(path_df):
     extractor = initialize_feature_extractor()
     ser_reader = sitk.ImageSeriesReader()
 
-    for _, row in path_df.iterrows():
+    for _, row in tqdm(path_df.iterrows()):
         scan_id = row['scan_id']
         ct_path = row['path_ct']
         mask_path = row['path_mask']
@@ -170,6 +171,72 @@ def extract_radiomics(path_df):
         print(f'finished processing scan: {scan_id}')
 
     return pd.DataFrame(records), mismatched_scans
+
+
+def extract_radiomics_paralell(scan):
+
+    try:
+        scan_id = scan['scan_id']
+        print(f'started processing scan: {scan_id}')
+
+        # to create df from later
+        records = []
+
+        # this is to collect ct scans where there is mismatch between seg and ct slice counts
+        mismatched_scans = []
+
+        #some extractor and reader specifications
+        seg_reader = dcmseg.SegmentReader()
+        extractor = initialize_feature_extractor()
+        ser_reader = sitk.ImageSeriesReader()
+
+        scan_id = scan['scan_id']
+        ct_path = scan['path_ct']
+        mask_path = scan['path_mask']
+
+        
+
+        # read segmentation file, read ct scan as series
+        seg = pydicom.dcmread(list(mask_path.glob('*.dcm'))[0])
+        result_seg = seg_reader.read(seg)
+        dcm_paths = sorted(ct_path.glob('*.dcm'))
+        dcm_files = ser_reader.GetGDCMSeriesFileNames(str(ct_path))
+        ser_reader.SetFileNames(dcm_files)
+        sitk_dcms = ser_reader.Execute()
+
+
+        # find segmentation from neoplasm label
+        seg_infos = result_seg.segment_infos
+        for seg_num, info in seg_infos.items():
+
+            #could make this more efficient by stopping the loop if the correct item was found?
+            if 'Neoplasm' not in info.get('SegmentLabel', ''):
+                continue
+            neo_seg_num = seg_num
+            neoplasm_segment_img = result_seg.segment_image(neo_seg_num)
+            
+            #need to cast the segmentation onto the same space as dicom image
+            # otherwise radiomics will throw error because it thinks the segmentation is ever so slightly off due to data handling (by 0.0001 mm or so)
+            fixed_seg = fix_seg(neoplasm_segment_img, sitk_dcms)
+
+            # sanity check that they have the same dimensions, otherwise skip scan
+            if fixed_seg.GetSize() != sitk_dcms.GetSize():
+                print(f"Skipping {scan_id} due to size mismatch: seg={fixed_seg.GetSize()}, ct={sitk_dcms.GetSize()}")
+                mismatched_scans.append(scan_id)
+                continue
+
+            fixed_seg.CopyInformation(sitk_dcms)
+
+            #per-slice radiomics extraction
+            records = extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records)
+
+            print(f'finished processing scan: {scan_id}')
+
+        return records, mismatched_scans
+    
+    except Exception:
+        print(f'Process failed due to: {Exception}')
+        raise Exception
 
 
 ### 3 - FEATURE PREPROCESSING FROM: Radiomics_for_CEM https://github.com/precision-medicine-um/Radiomics_for_CEM
