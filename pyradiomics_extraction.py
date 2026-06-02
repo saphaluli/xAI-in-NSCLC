@@ -30,10 +30,8 @@ test_paralell_processing = bool(False)
 #else:
 
 path_df = create_path_df(general_dir)
-path_df = path_df.sort_values(by='scan_id', ascending=True)
-
-path_df = path_df.iloc[:10] #could make this user argument, just make sure you know how to correctly split it...
-
+path_df = path_df.sort_values(by='scan_id', ascending=True, ignore_index=True) #make sure to ignore index
+print(f'Processing {path_df.shape[0]} scans. Should be: 422')
 
 if test_paralell_processing is True:
     start = time.time()
@@ -52,8 +50,6 @@ else:
     features, mismatched_scans = extract_radiomics(path_df)
     end = time.time()
 records_df = pd.DataFrame(features)
-
-#records_df, mismatched_scans = extract_radiomics(path_df)
 
 print(f'time elapsed: {(end - start) / 60:.2f} minutes')
 print('mismatched scan list: ', mismatched_scans)
