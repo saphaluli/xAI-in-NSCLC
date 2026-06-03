@@ -9,4 +9,4 @@ NSCLC-Radiomics
 python
 .venv
 __pycache__
-log.txt
+testing_figures.ipynb
