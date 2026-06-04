@@ -101,13 +101,22 @@ if is_optimal_features == True:
     T_single_rfecv = time.time() - start_rfecv
     support = rfecv.support_
 
-    fig, ax = plt.subplots()
-    mean_scores = rfecv.cv_results_['mean_test_score']
+    fig, ax = plt.subplots(figsize=(8, 6))
     no_features = rfecv.cv_results_['n_features']
-    ax.plot(no_features, mean_scores)
+
+    # plot line for each fold
+    for k in range(10):
+        scores = rfecv.cv_results_[f"split{k}_test_score"]
+        ax.plot(no_features, scores, alpha=0.5, label=f"Fold {k}")
+
+    # mean score
+    mean_scores = rfecv.cv_results_['mean_test_score']
+    ax.plot(no_features, mean_scores, color='black', linewidth=2, label='Mean')
+
     ax.set(xlabel='no. of features', ylabel='roc_auc')
     ax.set_title('Results of RFECV cross validation')
-    fig.savefig(fig.savefig(path_to_save + r'/RFECV_results.png'))
+    ax.legend()
+    fig.savefig(path_to_save + r'/RFECV_results.png')
 
 
 #todo: print out cross validation outcome
