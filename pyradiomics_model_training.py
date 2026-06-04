@@ -21,7 +21,7 @@ is_single_slice = bool(False)
 # True -> RFECV, False -> RFE
 is_optimal_features = bool(True)
 
-#datasets 
+# datasets 
 clinical_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics-Lung1.clinical-version3-Oct-2019.csv'))
 features_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/FULL_radiomics_features_per_slice.csv'))
 path_to_save = os.path.expanduser('~/project/xAI-in-NSCLC')
