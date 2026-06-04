@@ -59,16 +59,6 @@ def create_path_df(general_dir):
 
 ### 2 - PYRADIOMICS SETUP AND EXTRACTION
 
-# turn segmentation into slices instead of 3D object
-
-def extract_slice(img, slice_no):
-    size = list(img.GetSize())
-    index = [0, 0, int(slice_no)]
-
-    size[2] = 0  # extract 2D slice
-    return sitk.Extract(img, size, index)
-
-
 # set up feature extractor for pyradiomics
 
 def initialize_feature_extractor():
@@ -88,6 +78,15 @@ def initialize_feature_extractor():
     extractor.enableFeatureClassByName('ngtdm', enabled=True)
     return extractor
 
+# turn segmentation into slices instead of 3D object
+
+def extract_slice(img, slice_no):
+    size = list(img.GetSize())
+    index = [0, 0, int(slice_no)]
+
+    size[2] = 0  # extract 2D slice
+    return sitk.Extract(img, size, index)
+
 # fix alignment of the segmentation to the ct scan
 
 def fix_seg(seg_img, ct_imgs):
@@ -98,8 +97,9 @@ def fix_seg(seg_img, ct_imgs):
 def extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records):
     for slice_no in range(sitk_dcms.GetSize()[2]):
         seg_slice = extract_slice(fixed_seg, slice_no)
-        img_slice = extract_slice(sitk_dcms, slice_no)                # Check if segmentation contains label 1 -> some slices will have no segmentation
+        img_slice = extract_slice(sitk_dcms, slice_no)
         
+        # Check if segmentation contains label 1 -> some slices will have no segmentation (label 0)
         if 1 not in sitk.GetArrayViewFromImage(seg_slice):
             continue
 
@@ -124,8 +124,8 @@ def extract_radiomics(path_df):
 
     #some extractor and reader specifications
     seg_reader = dcmseg.SegmentReader()
-    extractor = initialize_feature_extractor()
     ser_reader = sitk.ImageSeriesReader()
+    extractor = initialize_feature_extractor()
 
     for _, row in tqdm(path_df.iterrows()):
         scan_id = row['scan_id']
@@ -147,8 +147,7 @@ def extract_radiomics(path_df):
         seg_infos = result_seg.segment_infos
         for seg_num, info in seg_infos.items():
 
-            #could make this more efficient by stopping the loop if the correct item was found?
-            if 'Neoplasm' not in info.get('SegmentLabel', ''):
+            if 'Neoplasm' not in info.get('SegmentLabel', ''): #neoplasm label is available in all patients
                 continue
             neo_seg_num = seg_num
             neoplasm_segment_img = result_seg.segment_image(neo_seg_num)
@@ -172,71 +171,6 @@ def extract_radiomics(path_df):
 
     return pd.DataFrame(records), mismatched_scans
 
-
-def extract_radiomics_paralell(scan):
-
-    try:
-        scan_id = scan['scan_id']
-        print(f'started processing scan: {scan_id}')
-
-        # to create df from later
-        records = []
-
-        # this is to collect ct scans where there is mismatch between seg and ct slice counts
-        mismatched_scans = []
-
-        #some extractor and reader specifications
-        seg_reader = dcmseg.SegmentReader()
-        extractor = initialize_feature_extractor()
-        ser_reader = sitk.ImageSeriesReader()
-
-        scan_id = scan['scan_id']
-        ct_path = scan['path_ct']
-        mask_path = scan['path_mask']
-
-        
-
-        # read segmentation file, read ct scan as series
-        seg = pydicom.dcmread(list(mask_path.glob('*.dcm'))[0])
-        result_seg = seg_reader.read(seg)
-        dcm_paths = sorted(ct_path.glob('*.dcm'))
-        dcm_files = ser_reader.GetGDCMSeriesFileNames(str(ct_path))
-        ser_reader.SetFileNames(dcm_files)
-        sitk_dcms = ser_reader.Execute()
-
-
-        # find segmentation from neoplasm label
-        seg_infos = result_seg.segment_infos
-        for seg_num, info in seg_infos.items():
-
-            #could make this more efficient by stopping the loop if the correct item was found?
-            if 'Neoplasm' not in info.get('SegmentLabel', ''):
-                continue
-            neo_seg_num = seg_num
-            neoplasm_segment_img = result_seg.segment_image(neo_seg_num)
-            
-            #need to cast the segmentation onto the same space as dicom image
-            # otherwise radiomics will throw error because it thinks the segmentation is ever so slightly off due to data handling (by 0.0001 mm or so)
-            fixed_seg = fix_seg(neoplasm_segment_img, sitk_dcms)
-
-            # sanity check that they have the same dimensions, otherwise skip scan
-            if fixed_seg.GetSize() != sitk_dcms.GetSize():
-                print(f"Skipping {scan_id} due to size mismatch: seg={fixed_seg.GetSize()}, ct={sitk_dcms.GetSize()}")
-                mismatched_scans.append(scan_id)
-                continue
-
-            fixed_seg.CopyInformation(sitk_dcms)
-
-            #per-slice radiomics extraction
-            records = extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records)
-
-            print(f'finished processing scan: {scan_id}')
-
-        return records, mismatched_scans
-    
-    except Exception:
-        print(f'Process failed due to: {Exception}')
-        raise Exception
 
 
 ### 3 - FEATURE PREPROCESSING FROM: Radiomics_for_CEM https://github.com/precision-medicine-um/Radiomics_for_CEM
@@ -295,3 +229,34 @@ def get_optimal_threshold(true_outcome, predictions, pos_label=1):
     optimal_idx = np.argmax(tpr - fpr)
     optimal_threshold = thresholds[optimal_idx]
     return optimal_threshold
+
+
+def merge_and_clean(features_df, clinical_df, mapping):
+    merged_df = pd.merge(features_df, clinical_df[['PatientID', 'Histology']], on='PatientID', how='left')
+    merged_df = merged_df.sort_values(by=['PatientID'], ascending=True)
+    merged_df_clean = merged_df.dropna(subset=['Histology'])
+    merged_df_clean['Histology'] = merged_df_clean['Histology'].map(mapping)
+    merged_df_clean['Histology'].unique()
+
+    return merged_df_clean
+
+def get_multiclass_results(y_true, proba, label, average='weighted'):
+    ## multiclass classification: choose argmax class and evaluate multiclass metrics
+    y_true_arr = np.asarray(y_true)
+    y_pred = np.argmax(proba, axis=1)
+    classes = np.unique(y_true)
+    y_true_bin = sklearn.preprocessing.label_binarize(y_true, classes=classes)
+    dict_results = {}
+    dict_results["auc_ovr_weighted"] = sklearn.metrics.roc_auc_score(
+        y_true_bin,
+        np.asarray(proba),
+        multi_class='ovr',
+        average=average # maybe it's something to do with this?
+    )
+    dict_results["accuracy"] = sklearn.metrics.accuracy_score(y_true, y_pred)
+    dict_results["precision"] = sklearn.metrics.precision_score(y_true, y_pred, average=average, zero_division=0)
+    dict_results["recall"] = sklearn.metrics.recall_score(y_true, y_pred, average=average, zero_division=0)
+    dict_results["f1 score"] = sklearn.metrics.f1_score(y_true, y_pred, average=average, zero_division=0)
+    df_results = pd.DataFrame.from_dict([dict_results])
+    df_results.index = [label]
+    return df_results
