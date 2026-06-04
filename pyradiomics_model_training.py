@@ -107,7 +107,7 @@ if is_optimal_features == True:
     ax.plot(no_features, mean_scores)
     ax.set(xlabel='no. of features', ylabel='roc_auc')
     ax.set_title('Results of RFECV cross validation')
-    fig.savefig(os.path.expanduser('~/project/xAI-in-NSCLC/RFECV_results.png'))
+    fig.savefig(fig.savefig(path_to_save + r'/RFECV_results.png'))
 
 #todo: print out cross validation outcome
 
@@ -177,7 +177,7 @@ if T_single_rfe is not None:
 print(f'Gridsearch took {T_single_gsearch/ 60:.2f} minutes')
 
 
-if find_optimal_features is not None:
+if is_optimal_features == True:
     filename_rfecv = path_to_save +'rfecv_radiomics.pkl'
     pickle.dump(rfecv, open(filename_rfecv, 'wb'))
 else:
