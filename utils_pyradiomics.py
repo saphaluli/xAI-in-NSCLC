@@ -234,7 +234,7 @@ def get_optimal_threshold(true_outcome, predictions, pos_label=1):
 def merge_and_clean(features_df, clinical_df, mapping):
     merged_df = pd.merge(features_df, clinical_df[['PatientID', 'Histology']], on='PatientID', how='left')
     merged_df = merged_df.sort_values(by=['PatientID'], ascending=True)
-    merged_df_clean = merged_df.dropna(subset=['Histology'])
+    merged_df_clean = merged_df.dropna(subset=['Histology']) # drop patients without histological assessment
     merged_df_clean['Histology'] = merged_df_clean['Histology'].map(mapping)
     merged_df_clean['Histology'].unique()
 

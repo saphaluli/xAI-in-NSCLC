@@ -10,4 +10,5 @@ python
 .venv
 __pycache__
 testing_figures.ipynb
-.pkl
+*.pkl
+*.png

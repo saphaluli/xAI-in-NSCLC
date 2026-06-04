@@ -6,6 +6,7 @@ import argparse
 import numpy as np
 import xgboost as xgb
 import sklearn
+import matplotlib.pyplot as plt
 from sklearn.feature_selection import RFE, RFECV
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
 
@@ -17,8 +18,7 @@ from utils_pyradiomics import preprocessing_train, preprocessing_test, get_optim
 is_bypatient = bool(True)
 is_single_slice = bool(False)
 
-
-# RFECV or rfe
+# True -> RFECV, False -> RFE
 is_optimal_features = bool(True)
 
 #datasets 
@@ -100,6 +100,14 @@ if is_optimal_features == True:
     rfecv.fit(decor_dataset_train, y_train)
     T_single_rfecv = time.time() - start_rfecv
     support = rfecv.support_
+
+    fig, ax = plt.subplots()
+    mean_scores = rfecv.cv_results_['mean_test_score']
+    no_features = rfecv.cv_results_['n_features']
+    ax.plot(no_features, mean_scores)
+    ax.set(xlabel='no. of features', ylabel='roc_auc')
+    ax.set_title('Results of RFECV cross validation')
+    fig.savefig(os.path.expanduser('~/project/xAI-in-NSCLC/RFECV_results.png'))
 
 #todo: print out cross validation outcome
 
