@@ -18,7 +18,7 @@ radiomics_dir_path = os.path.expanduser('~/project/xAI-in-NSCLC/FULL-radiomics_f
 
 ### TABLE 1- DESCRIPTIVES FOR 
 
-if 'table_1' is in desired:
+if 'table_1' in desired:
     df = pd.read_csv(clinical_dir_path)
     df = df.drop(labels='PatientID', axis=1)
     #enter name of outcome column here
