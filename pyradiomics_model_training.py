@@ -109,6 +109,7 @@ if is_optimal_features == True:
     ax.set_title('Results of RFECV cross validation')
     fig.savefig(fig.savefig(path_to_save + r'/RFECV_results.png'))
 
+
 #todo: print out cross validation outcome
 
 else:
