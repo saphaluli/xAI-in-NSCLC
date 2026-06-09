@@ -64,8 +64,8 @@ def create_path_df(general_dir):
 def initialize_feature_extractor():
     paramsFile = "CEM_extraction.yaml"
     extractor = featureextractor.RadiomicsFeatureExtractor(paramsFile, shape2D=True, force2D=True,
-                                                            force2Ddimension=True, resampledPixelSpacing=None)
-    extractor.addProvenance(False)
+                                                            force2Ddimension=0, resampledPixelSpacing=None) #originally: force2DDimension=True, now set to 0 for axial plane
+    extractor.addProvenance(False) #It's not necessary to resample PixelSpacing since it is consistent across the dataset.
     extractor.disableAllFeatures()
     extractor.enableImageTypes(Original={})
 
@@ -94,7 +94,7 @@ def fix_seg(seg_img, ct_imgs):
     return fixed_seg
 
 # per-slice extraction and record update
-def extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records):
+def extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records, seg_num):
     for slice_no in range(sitk_dcms.GetSize()[2]):
         seg_slice = extract_slice(fixed_seg, slice_no)
         img_slice = extract_slice(sitk_dcms, slice_no)
@@ -103,7 +103,7 @@ def extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records):
         if 1 not in sitk.GetArrayViewFromImage(seg_slice):
             continue
 
-        features = extractor.execute(img_slice, seg_slice, label=1)
+        features = extractor.execute(img_slice, seg_slice, label=seg_num)
         record = {'PatientID': scan_id,
                 'slice_no': slice_no}
         
@@ -165,7 +165,7 @@ def extract_radiomics(path_df):
             fixed_seg.CopyInformation(sitk_dcms)
 
             #per-slice radiomics extraction
-            records = extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records)
+            records = extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records, neo_seg_num)
 
         print(f'finished processing scan: {scan_id}')
 
@@ -231,12 +231,12 @@ def get_optimal_threshold(true_outcome, predictions, pos_label=1):
     return optimal_threshold
 
 
-def merge_and_clean(features_df, clinical_df, mapping):
-    merged_df = pd.merge(features_df, clinical_df[['PatientID', 'Histology']], on='PatientID', how='left')
+def merge_and_clean(features_df, clinical_df, mapping, outcome):
+    merged_df = pd.merge(features_df, clinical_df[['PatientID', outcome]], on='PatientID', how='left')
     merged_df = merged_df.sort_values(by=['PatientID'], ascending=True)
-    merged_df_clean = merged_df.dropna(subset=['Histology']) # drop patients without histological assessment
-    merged_df_clean['Histology'] = merged_df_clean['Histology'].map(mapping)
-    merged_df_clean['Histology'].unique()
+    merged_df_clean = merged_df.dropna(subset=[outcome]) # drop patients without histological assessment
+    merged_df_clean[outcome] = merged_df_clean[outcome].map(mapping)
+    merged_df_clean[outcome].unique()
 
     return merged_df_clean
 
