@@ -47,7 +47,7 @@ if 'table_1' in desired:
 
     combined.to_csv(os.path.expanduser('~/project/xAI-in-NSCLC/Table_1.csv'), index=True)
 
-if 'figure_1' is in desired:
+if 'figure_1' in desired:
     df = pd.read_csv(clinical_dir_path)
     df = df.drop(labels=['PatientID', 'slice_no'], axis=1)
 
