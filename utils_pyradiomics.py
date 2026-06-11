@@ -62,7 +62,7 @@ def create_path_df(general_dir):
 # set up feature extractor for pyradiomics
 
 def initialize_feature_extractor():
-    paramsFile = "test_CEM_extraction.yaml"
+    paramsFile = "CEM_extraction.yaml"
     extractor = featureextractor.RadiomicsFeatureExtractor(paramsFile, shape2D=True, force2D=True,
                                                             force2Ddimension=0, resampledPixelSpacing=None) #originally: force2DDimension=True, now set to 0 for axial plane
     extractor.addProvenance(False) #It's not necessary to resample PixelSpacing since it is consistent across the dataset.
