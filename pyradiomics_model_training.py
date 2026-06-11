@@ -26,20 +26,24 @@ clinical_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radio
 features_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/FULL_radiomics_features_per_slice.csv'))
 path_to_save = os.path.expanduser('~/project/xAI-in-NSCLC')
 
+outcome_stage = 'Histology'
+
 # merging and cleaning datasets
+#mapping = {'I': 0, 'II': 1, 'IIIa':2, 'IIIb':3}
 mapping = {'adenocarcinoma': 0, 'squamous cell carcinoma': 1, 'large cell': 2, 'nos':3 }
-merged_df = merge_and_clean(features_df, clinical_df, mapping)
+merged_df = merge_and_clean(features_df, clinical_df, mapping, outcome_stage)
 
 # only extract one slice per patient ID
 if is_single_slice == True:
     merged_df = merged_df.groupby(by='PatientID').sample(n=1, random_state=310).reset_index(drop=True)
 
+print(f'Number of outcome classes: {len(merged_df[outcome_stage].unique())}')
 
 if is_bypatient == True:
     # test train split by patient ID
-    temp_df = clinical_df.dropna(subset=['Histology'])
+    temp_df = clinical_df.dropna(subset=[outcome_stage])
     X = temp_df['PatientID']
-    y = temp_df['Histology']
+    y = temp_df[outcome_stage]
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.3, random_state=310, stratify=y)
 
@@ -50,20 +54,22 @@ if is_bypatient == True:
 
     # create test train split dfs for training
     X_train = merged_df.loc[merged_df['PatientID'].isin(train_labels)]
-    y_train = X_train['Histology']
+    y_train = X_train[outcome_stage]
     X_test = merged_df.loc[merged_df['PatientID'].isin(test_labels)]
-    y_test = X_test['Histology']
+    y_test = X_test[outcome_stage]
 
-    X_train = X_train.drop(columns=['PatientID', 'Histology', 'slice_no'])
-    X_test = X_test.drop(columns=['PatientID', 'Histology', 'slice_no'])
+    X_train = X_train.drop(columns=['PatientID', outcome_stage, 'slice_no'])
+    X_test = X_test.drop(columns=['PatientID', outcome_stage, 'slice_no'])
 
 else:
     #test train split NOT by patient ID, but by slice
 
-    X = merged_df_clean.drop(columns=['PatientID', 'Histology'])
-    y = merged_df_clean['Histology']
+    X = merged_df_clean.drop(columns=['PatientID', outcome_stage])
+    y = merged_df_clean[outcome_stage]
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.3, random_state=310, stratify=y)
+
+
 
 
 
@@ -72,7 +78,6 @@ mean_std, selector, to_drop, decor_dataset_train = preprocessing_train(X_train)
 decor_dataset_test = preprocessing_test(X_test, mean_std, selector, to_drop)
 print('features processed. New shape of training dataset:', decor_dataset_train.shape, 'before:', X_train.shape)
 
-mapping = {'adenocarcinoma': 0, 'squamous cell carcinoma': 1, 'large cell': 2, 'nos':3 }
 
 #model definition
 model = xgb.XGBClassifier(enable_categorical=True, colsample_bytree=1, eta=0.01, max_depth=4,
