@@ -62,7 +62,7 @@ def create_path_df(general_dir):
 # set up feature extractor for pyradiomics
 
 def initialize_feature_extractor():
-    paramsFile = "CEM_extraction.yaml"
+    paramsFile = "test_CEM_extraction.yaml"
     extractor = featureextractor.RadiomicsFeatureExtractor(paramsFile, shape2D=True, force2D=True,
                                                             force2Ddimension=0, resampledPixelSpacing=None) #originally: force2DDimension=True, now set to 0 for axial plane
     extractor.addProvenance(False) #It's not necessary to resample PixelSpacing since it is consistent across the dataset.
@@ -94,7 +94,7 @@ def fix_seg(seg_img, ct_imgs):
     return fixed_seg
 
 # per-slice extraction and record update
-def extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records, seg_num):
+def extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records):
     for slice_no in range(sitk_dcms.GetSize()[2]):
         seg_slice = extract_slice(fixed_seg, slice_no)
         img_slice = extract_slice(sitk_dcms, slice_no)
@@ -103,7 +103,7 @@ def extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records, seg_num
         if 1 not in sitk.GetArrayViewFromImage(seg_slice):
             continue
 
-        features = extractor.execute(img_slice, seg_slice, label=seg_num)
+        features = extractor.execute(img_slice, seg_slice, label=1)
         record = {'PatientID': scan_id,
                 'slice_no': slice_no}
         
@@ -137,7 +137,6 @@ def extract_radiomics(path_df):
         # read segmentation file, read ct scan as series
         seg = pydicom.dcmread(list(mask_path.glob('*.dcm'))[0])
         result_seg = seg_reader.read(seg)
-        dcm_paths = sorted(ct_path.glob('*.dcm'))
         dcm_files = ser_reader.GetGDCMSeriesFileNames(str(ct_path))
         ser_reader.SetFileNames(dcm_files)
         sitk_dcms = ser_reader.Execute()
@@ -147,25 +146,28 @@ def extract_radiomics(path_df):
         seg_infos = result_seg.segment_infos
         for seg_num, info in seg_infos.items():
 
-            if 'Neoplasm' not in info.get('SegmentLabel', ''): #neoplasm label is available in all patients
+            if 'Neoplasm' in info.get('SegmentLabel', ''): #neoplasm label is available in all patients
+                break
+            else:
                 continue
-            neo_seg_num = seg_num
-            neoplasm_segment_img = result_seg.segment_image(neo_seg_num)
+
+        neo_seg_num = seg_num
+        neoplasm_segment_img = result_seg.segment_image(neo_seg_num)
         
-            #need to cast the segmentation onto the same space as dicom image
-            # otherwise radiomics will throw error because it thinks the segmentation is ever so slightly off due to data handling (by 0.0001 mm or so)
-            fixed_seg = fix_seg(neoplasm_segment_img, sitk_dcms)
+        #need to cast the segmentation onto the same space as dicom image
+        # otherwise radiomics will throw error because it thinks the segmentation is ever so slightly off due to data handling (by 0.0001 mm or so)
+        fixed_seg = fix_seg(neoplasm_segment_img, sitk_dcms)
 
-            # sanity check that they have the same dimensions, otherwise skip scan
-            if fixed_seg.GetSize() != sitk_dcms.GetSize():
-                print(f"Skipping {scan_id} due to size mismatch: seg={fixed_seg.GetSize()}, ct={sitk_dcms.GetSize()}")
-                mismatched_scans.append(scan_id)
-                continue
+        # sanity check that they have the same dimensions, otherwise skip scan
+        if fixed_seg.GetSize() != sitk_dcms.GetSize():
+            print(f"Skipping {scan_id} due to size mismatch: seg={fixed_seg.GetSize()}, ct={sitk_dcms.GetSize()}")
+            mismatched_scans.append(scan_id)
+            continue
 
-            fixed_seg.CopyInformation(sitk_dcms)
+        fixed_seg.CopyInformation(sitk_dcms)
 
-            #per-slice radiomics extraction
-            records = extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records, neo_seg_num)
+        #per-slice radiomics extraction
+        records = extract_per_slice(extractor, fixed_seg, sitk_dcms, scan_id, records)
 
         print(f'finished processing scan: {scan_id}')
 
@@ -196,6 +198,7 @@ def get_correlated_features_to_drop(thres_dataset_train):
 def preprocessing_train(df_true_mask_train_features):  ##patient name needs to be removed
     ##normalize the features
     mean_std = {}
+    print(f'Original size: {df_true_mask_train_features.shape[1]}')
     for var in df_true_mask_train_features.columns:
         temp_mean = df_true_mask_train_features[var].mean()
         temp_std = df_true_mask_train_features[var].std()
@@ -205,10 +208,13 @@ def preprocessing_train(df_true_mask_train_features):  ##patient name needs to b
     selector = VarianceThreshold(threshold=0.01)
     selector.fit(df_true_mask_train_features)
     thres_dataset_train = df_true_mask_train_features.loc[:, selector.get_support()]
+    print(f'Size after removing low-variance features: {df_true_mask_train_features.shape[1]}')
     ## get_correlated_features_to_drop
     to_drop = get_correlated_features_to_drop(thres_dataset_train)
     decor_dataset = thres_dataset_train.drop(to_drop, axis=1)
+    print(f'Size after removing highly correlated features: {df_true_mask_train_features.shape[1]}')
     return mean_std, selector, to_drop, decor_dataset
+
 
 def preprocessing_test(df_true_mask_test_features, mean_std, selector, to_drop):  ##apply parameters to test dataset
     for var in df_true_mask_test_features.columns:

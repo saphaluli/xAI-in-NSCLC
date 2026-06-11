@@ -2,7 +2,6 @@
 import os
 import sys
 import time
-import argsparse
 from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
@@ -12,7 +11,7 @@ from radiomics import featureextractor
 import pandas as pd
 import logging
 from concurrent.futures import ProcessPoolExecutor
-from utils_pyradiomics import extract_radiomics, create_path_df
+from test_utils_pyradiomics import extract_radiomics, create_path_df
 
 # hiding pyradiomics info, clogs up terminal
 logging.getLogger('radiomics').setLevel(logging.ERROR)
@@ -25,8 +24,9 @@ general_dir = Path(os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics'))
 
 path_df = create_path_df(general_dir)
 path_df = path_df.sort_values(by='scan_id', ascending=True, ignore_index=True) #make sure to ignore index
-print(f'Processing {path_df.shape[0]} scans. Should be: 422')
 
+#testing only 30 columns for now!
+print(f'Processing {path_df.shape[0]} scans. Should be: 422')
 start = time.time()
 features, mismatched_scans = extract_radiomics(path_df)
 end = time.time()
