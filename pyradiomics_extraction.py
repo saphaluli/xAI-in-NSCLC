@@ -25,7 +25,6 @@ general_dir = Path(os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics'))
 path_df = create_path_df(general_dir)
 path_df = path_df.sort_values(by='scan_id', ascending=True, ignore_index=True) #make sure to ignore index
 
-#testing only 30 columns for now!
 print(f'Processing {path_df.shape[0]} scans. Should be: 422')
 start = time.time()
 features, mismatched_scans = extract_radiomics(path_df)
