@@ -11,7 +11,7 @@ from radiomics import featureextractor
 import pandas as pd
 import logging
 from concurrent.futures import ProcessPoolExecutor
-from test_utils_pyradiomics import extract_radiomics, create_path_df
+from utils_pyradiomics import extract_radiomics, create_path_df
 
 # hiding pyradiomics info, clogs up terminal
 logging.getLogger('radiomics').setLevel(logging.ERROR)
@@ -33,4 +33,4 @@ records_df = pd.DataFrame(features)
 
 print(f'time elapsed: {(end - start) / 60:.2f} minutes')
 print('mismatched scan list: ', mismatched_scans)
-records_df.to_csv('FULL_radiomics_features_per_slice.csv', index=False)
+records_df.to_csv('full_radiomics_per_slice.csv', index=False)
