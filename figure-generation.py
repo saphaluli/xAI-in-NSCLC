@@ -22,7 +22,7 @@ if 'table_1' in desired:
     df = pd.read_csv(clinical_dir_path)
     df = df.drop(labels='PatientID', axis=1)
     #enter name of outcome column here
-    outcome = 'Histology'
+    outcome = 'Overall.Stage'
 
     #Determine all of the variables that exist
     #Determine whether these variables are categorical or continuous
@@ -48,7 +48,7 @@ if 'table_1' in desired:
     combined.to_csv(os.path.expanduser('~/project/xAI-in-NSCLC/Table_1.csv'), index=True)
 
 if 'figure_1' in desired:
-    df = pd.read_csv(clinical_dir_path)
+    df = pd.read_csv(radiomics_dir_path)
     df = df.drop(labels=['PatientID', 'slice_no'], axis=1)
 
     feature_names = sorted(filter ( lambda k: k.startswith("original_"), df.columns))
