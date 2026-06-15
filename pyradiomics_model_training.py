@@ -1,5 +1,6 @@
 import os
 import time
+import random
 import pickle
 import pandas as pd
 import argparse
@@ -10,34 +11,40 @@ import matplotlib.pyplot as plt
 from sklearn.feature_selection import RFE, RFECV
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
 
-from utils_pyradiomics import preprocessing_train, preprocessing_test, get_optimal_threshold, merge_and_clean, get_multiclass_results
+from utils_pyradiomics import preprocessing_train, preprocessing_test, get_optimal_threshold, merge_and_clean, get_multiclass_results, get_stats_with_ci, generate_features_table
 
 ### SETTINGS
 # is_by_patient -> splits dataset by patientID first if True
 # is_single_slice -> takes only one slice per patient for training or testing if True
-is_bypatient = bool(True)
-is_single_slice = bool(False)
+is_bypatient = bool(False)
+is_single_slice = bool(True)
 
 # True -> RFECV, False -> RFE
-is_optimal_features = bool(True)
+is_optimal_features = bool(False)
 
 # datasets 
 clinical_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics-Lung1.clinical-version3-Oct-2019.csv'))
-features_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/FULL_radiomics_features_per_slice.csv'))
+features_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/full_radiomics_per_slice.csv'))
 path_to_save = os.path.expanduser('~/project/xAI-in-NSCLC')
 
-outcome_stage = 'Histology'
+#outcome_stage = 'Histology'
+outcome_stage = 'Overall.Stage'
+
+#generating per-patient statistics
+
+features_df = features_df.drop(columns=['slice_no'])
+features_df = generate_features_table(features_df)
 
 # merging and cleaning datasets
-#mapping = {'I': 0, 'II': 1, 'IIIa':2, 'IIIb':3}
-mapping = {'adenocarcinoma': 0, 'squamous cell carcinoma': 1, 'large cell': 2, 'nos':3 }
+mapping = {'I': 0, 'II': 1, 'IIIa':2, 'IIIb':2}
+#mapping = {'adenocarcinoma': 0, 'squamous cell carcinoma': 1, 'large cell': 2, 'nos':3 }
 merged_df = merge_and_clean(features_df, clinical_df, mapping, outcome_stage)
+
 
 # only extract one slice per patient ID
 if is_single_slice == True:
-    merged_df = merged_df.groupby(by='PatientID').sample(n=1, random_state=310).reset_index(drop=True)
+    merged_df = merged_df.groupby(by='PatientID').sample(n=1, random_state=240).reset_index(drop=True)
 
-print(f'Number of outcome classes: {len(merged_df[outcome_stage].unique())}')
 
 if is_bypatient == True:
     # test train split by patient ID
@@ -45,7 +52,7 @@ if is_bypatient == True:
     X = temp_df['PatientID']
     y = temp_df[outcome_stage]
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=310, stratify=y)
+        X, y, test_size=0.3, random_state=240, stratify=y)
 
     # save patient IDs for deep learning test train split later
     train_labels = X_train.unique()
@@ -58,16 +65,18 @@ if is_bypatient == True:
     X_test = merged_df.loc[merged_df['PatientID'].isin(test_labels)]
     y_test = X_test[outcome_stage]
 
-    X_train = X_train.drop(columns=['PatientID', outcome_stage, 'slice_no'])
-    X_test = X_test.drop(columns=['PatientID', outcome_stage, 'slice_no'])
+    X_train = X_train.drop(columns=['PatientID', outcome_stage])#, 'slice_no'])
+    X_test = X_test.drop(columns=['PatientID', outcome_stage])#, 'slice_no'])
 
 else:
     #test train split NOT by patient ID, but by slice
 
-    X = merged_df_clean.drop(columns=['PatientID', outcome_stage])
-    y = merged_df_clean[outcome_stage]
+    X = merged_df.drop(columns=['PatientID', outcome_stage])
+    y = merged_df[outcome_stage]
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.3, random_state=310, stratify=y)
+
+print(f'Number of outcome classes: {len(y_train.unique())}')
 
 
 
@@ -78,11 +87,15 @@ mean_std, selector, to_drop, decor_dataset_train = preprocessing_train(X_train)
 decor_dataset_test = preprocessing_test(X_test, mean_std, selector, to_drop)
 print('features processed. New shape of training dataset:', decor_dataset_train.shape, 'before:', X_train.shape)
 
+if len(y_train.unique()) > 2:
+    objective = 'multi:softprob'
+else:
+    objective = 'binary:logistic'
 
 #model definition
 model = xgb.XGBClassifier(enable_categorical=True, colsample_bytree=1, eta=0.01, max_depth=4,
-                            objective='multi:softprob', eval_metric='logloss', nthread=8,
-                            gamma=0.5, seed=310)
+                            objective=objective, eval_metric='logloss', nthread=8, #'multi:softprob'
+                            gamma=0.5, seed=240)
 
 #measuring time to train one model
 #start_model1 = time.time()
@@ -95,10 +108,18 @@ min_features_to_select = 10
 T_single_rfecv = None
 T_single_rfe = None
 
+if len(y_train.unique()) > 2:
+    scoring = 'roc_auc_ovr_weighted'
+else:
+    scoring = 'roc_auc'
+
 if is_optimal_features == True:
+
+
+
     print('Performing RFECV')
     rfecv = RFECV(estimator=model, step=1, cv=StratifiedKFold(10),
-                scoring='roc_auc_ovr_weighted',
+                scoring=scoring,
                 min_features_to_select=min_features_to_select)
 
     start_rfecv = time.time()
@@ -128,7 +149,7 @@ if is_optimal_features == True:
 
 else:
     print('Performing RFE')
-    rfe = RFE(estimator=model, n_features_to_select=10)
+    rfe = RFE(estimator=model, n_features_to_select=15)
     start_rfe = time.time()
     rfe.fit(decor_dataset_train, y_train)
     T_single_rfe = time.time() - start_rfe
@@ -149,8 +170,8 @@ param_test_xgb = {
         'n_estimators': [200, 300, 400, 500], #int(x) for x in np.linspace(start=200, stop=400, num=100)
     }
 
-kfold = StratifiedKFold(n_splits=10, random_state=310, shuffle=True) #increase this back to 10 ?
-gsearch = GridSearchCV(model, param_grid=param_test_xgb, scoring='roc_auc_ovr_weighted', n_jobs=4, cv=kfold, verbose=1)
+kfold = StratifiedKFold(n_splits=10, random_state=240, shuffle=True) #increase this back to 10 ?
+gsearch = GridSearchCV(model, param_grid=param_test_xgb, scoring=scoring, n_jobs=4, cv=kfold, verbose=1) #'roc_auc_ovr_weighted'
 
 #measure time for gsearch
 start_gsearch = time.time()
@@ -163,10 +184,75 @@ best_estimator = gsearch.best_estimator_
 proba_train = best_estimator.predict_proba(reduced_features_train_set)
 proba_test = best_estimator.predict_proba(reduced_features_test_set)
 
-results_train = get_multiclass_results(y_train, proba_train, "train")
-results_test = get_multiclass_results(y_test, proba_test, "test")
 
-results_overall = pd.concat([results_train, results_test])
+if len(y_train.unique()) > 2:
+
+    results_train = get_multiclass_results(y_train, proba_train, "train")
+    results_test = get_multiclass_results(y_test, proba_test, "test")
+
+    results_overall = pd.concat([results_train, results_test])
+
+else:
+    proba_train = proba_train[:, 1]
+
+    optimal_threshold = get_optimal_threshold(y_train, proba_train, pos_label=1)
+
+    df_distributions_train, df_results_train = get_stats_with_ci(y_train, proba_train, 'train', optimal_threshold, nsamples=2000)
+    df_distributions_test, df_results_test = get_stats_with_ci(y_test, proba_test, 'test', optimal_threshold, nsamples=2000)
+
+    results_overall = pd.concat([df_results_train, df_results_test])
+
+#SHAP explanation 
+
+explainer = shap.TreeExplainer(best_estimator)
+shap_values = explainer(reduced_features_test_set)
+
+if len(y_train.unique()) > 2:
+    
+    for 
+
+else:
+    # beeswarm // whole model
+    fig = shap.plots.beeswarm(shap_values, max_display=reduced_features_test_set.shape[1], plot_size=[10, 6], color=plt.get_cmap("cool"), show=False)
+    plt.savefig('Model_shap.png', bbox_inches='tight')
+
+    # getting indices of positive and negative predictions
+
+    neg = y_test.loc[y_test == 0]
+    pos = y_test.loc[y_test == 1]
+
+    neg_list = neg.index
+    pos_list = pos.index
+
+    neg_idx = random.choice(neg_list)
+    pos_idx = random.choice(pos_list)
+
+    neg_idx = y_test.index.get_loc(neg_idx)
+    pos_idx = y_test.index.get_loc(pos_idx)
+
+    # negative plot
+    fig, ax = plt.subplots()
+
+    shap.plots.waterfall(shap_values[neg_idx], max_display=10, show=False)
+    fig.set_size_inches(10, 6)
+    fig = plt.gcf()
+    fig.tight_layout()
+    fig.savefig(str(path_to_save) + '/SHAP-figures/Negative_patient_shap.png', bbox_inches='tight')
+
+    plt.close(fig)
+
+    # positive plot
+    fig, ax = plt.subplots()
+
+    shap.plots.waterfall(shap_values[pos_idx], max_display=10, show=False) #reduced_features_test_set.shape[1] for full
+    fig.set_size_inches(10, 6)
+    fig = plt.gcf()
+    fig.tight_layout()
+    fig.savefig(str(path_to_save) + '/SHAP-figures/Positive_patient_shap.png', bbox_inches='tight')
+
+    plt.close(fig)
+
+    print('Saved SHAP analysis plots')
 
 
 print('\nOUTCOME DISTRIBUTION & PERFORMANCE ACROSS TRAIN/TEST: --------------------------------')
