@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
+from scipy.stats import f_oneway
 
 
 # select variables and determine type
@@ -53,6 +54,8 @@ def calc_metrics(df, cat_var, cont_var):
             count = df.loc[df[var] == cls][var].count()
             total = df[var].count()
             pc = (count / total) * 100
+
+            #Chi square?
 
             var_metrics.append((('{}').format(cls), ('{}% ({} / {})').format(round(pc, 2), count, total)))
 

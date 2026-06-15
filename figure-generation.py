@@ -1,20 +1,21 @@
 import os
 import pandas as pd
 import numpy as np
+from scipy.stats import f_oneway
 from utils_descriptives import variable_selection, split_by_class, calc_metrics, metrics_to_df
 
 #insert the tables and figures you want here:
 #Note: the figures should correspond to the figure number in the paper.
 
 desired = [
-            #'table_1',
-            'figure_1'
+            'table_1',
+            #'figure_1'
 ]
 
 # insert directories here.
-clinical_dir_path = os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics-Lung1.clinical-version3-Oct-2019.csv')
-radiomics_dir_path = os.path.expanduser('~/project/xAI-in-NSCLC/FULL-radiomics_features_per_slice.csv')
-
+clinical_dir_path = os.path.expanduser('~/Documents/NSCLC-Radiomics-Lung1.clinical-version3-Oct-2019.csv')
+radiomics_dir_path = os.path.expanduser('~/Documents/GitHub/xAI-in-NSCLC/FULL-radiomics_features_per_slice.csv')
+output_dir = '~/Documents/GitHub/xAI-in-NSCLC/Figures'
 
 ### TABLE 1- DESCRIPTIVES FOR 
 
@@ -23,6 +24,7 @@ if 'table_1' in desired:
     df = df.drop(labels='PatientID', axis=1)
     #enter name of outcome column here
     outcome = 'Overall.Stage'
+    df.loc[(df[outcome] == 'IIIa') | (df[outcome] == 'IIIb'), outcome] = 'III'
 
     #Determine all of the variables that exist
     #Determine whether these variables are categorical or continuous
@@ -43,9 +45,10 @@ if 'table_1' in desired:
     }
 
     combined = pd.concat(metric_frames.values(), axis=1)
+
     combined = combined.fillna('-')
 
-    combined.to_csv(os.path.expanduser('~/project/xAI-in-NSCLC/Table_1.csv'), index=True)
+    combined.to_csv(os.path.expanduser(output_dir + r'/Table_1.csv'), index=True)
 
 if 'figure_1' in desired:
     df = pd.read_csv(radiomics_dir_path)
