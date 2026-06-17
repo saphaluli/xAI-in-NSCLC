@@ -99,6 +99,7 @@ def preprocessing_train(df_true_mask_train_features):  ##patient name needs to b
         df_true_mask_train_features[var] = (df_true_mask_train_features[var] - temp_mean) / temp_std
     ##remove low variance features
     selector = VarianceThreshold(threshold=0.01)
+    variances = df_true_mask_train_features.var()
     selector.fit(df_true_mask_train_features)
     thres_dataset_train = df_true_mask_train_features.loc[:, selector.get_support()]
     print(f'Size after removing low-variance features: {thres_dataset_train.shape[1]}')
