@@ -7,6 +7,7 @@
 
 # imports 
 import tensorflow as tf
+import time
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -178,9 +179,12 @@ model1.compile(optimizer=tf.keras.optimizers.Adam(learning_rate= 0.001), loss='c
                         tf.keras.metrics.FalsePositives(name='FP'),
                         tf.keras.metrics.AUC(name='AUC')])
 
+
+start = time.time()
 history = model1.fit(train_generator, epochs=20, validation_data=(test_images, y_test),
             verbose = 2,
             callbacks = [cp_callback])
+T_single = time.time() - start
 
 
 # yeahhh I'm not sure whether this iwll imporve that much... Maybe subsample only a few patients per sample for the full dataset? Like 4 slices?
@@ -201,3 +205,5 @@ plt.grid(True)
 fig.savefig(path_to_save + 'neural_net_loss.png')
 
 print('Finished training model.')
+print(f'Model training took: {T_single / 60 /60:.2f} hours or (not and) {T_single / 60:.2f} minutes')
+print(f'Approx. {T_single/60 /20:2f} minutes per epoch, which is {T_single/20:2f} seconds')
