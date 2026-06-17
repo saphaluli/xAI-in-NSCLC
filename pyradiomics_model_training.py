@@ -1,3 +1,5 @@
+# Code modified from 
+#imports 
 import os
 import time
 import random
@@ -11,16 +13,16 @@ import matplotlib.pyplot as plt
 from sklearn.feature_selection import RFE, RFECV
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
 
-from utils_pyradiomics import preprocessing_train, preprocessing_test, get_optimal_threshold, merge_and_clean, get_multiclass_results, get_stats_with_ci, generate_features_table
+from utils_model_training import preprocessing_train, preprocessing_test, get_optimal_threshold, merge_and_clean, get_multiclass_results, get_stats_with_ci, generate_features_table
 
 ### SETTINGS
 # is_by_patient -> splits dataset by patientID first if True
 # is_single_slice -> takes only one slice per patient for training or testing if True
-is_bypatient = bool(False)
-is_single_slice = bool(True)
+is_bypatient = bool(True)
+is_single_slice = bool(False)
 
 # True -> RFECV, False -> RFE
-is_optimal_features = bool(False)
+is_optimal_features = bool(True)
 
 # datasets 
 clinical_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics-Lung1.clinical-version3-Oct-2019.csv'))
@@ -33,10 +35,10 @@ outcome_stage = 'Overall.Stage'
 #generating per-patient statistics
 
 features_df = features_df.drop(columns=['slice_no'])
-features_df = generate_features_table(features_df)
+#features_df = generate_features_table(features_df)
 
 # merging and cleaning datasets
-mapping = {'I': 0, 'II': 1, 'IIIa':2, 'IIIb':2}
+mapping = {'I': 0, 'II': 1, 'IIIa':2, 'IIIb':3}
 #mapping = {'adenocarcinoma': 0, 'squamous cell carcinoma': 1, 'large cell': 2, 'nos':3 }
 merged_df = merge_and_clean(features_df, clinical_df, mapping, outcome_stage)
 
@@ -103,7 +105,7 @@ model = xgb.XGBClassifier(enable_categorical=True, colsample_bytree=1, eta=0.01,
 #T_single_model1 = time.time() - start_model1
 
 # recursive feature elimination with cross validation:
-min_features_to_select = 10
+min_features_to_select = 1
 
 T_single_rfecv = None
 T_single_rfe = None
@@ -149,7 +151,7 @@ if is_optimal_features == True:
 
 else:
     print('Performing RFE')
-    rfe = RFE(estimator=model, n_features_to_select=15)
+    rfe = RFE(estimator=model, n_features_to_select=10)
     start_rfe = time.time()
     rfe.fit(decor_dataset_train, y_train)
     T_single_rfe = time.time() - start_rfe
@@ -204,55 +206,55 @@ else:
 
 #SHAP explanation 
 
-explainer = shap.TreeExplainer(best_estimator)
-shap_values = explainer(reduced_features_test_set)
+# explainer = shap.TreeExplainer(best_estimator)
+# shap_values = explainer(reduced_features_test_set)
 
-if len(y_train.unique()) > 2:
-    
-    for 
+# if len(y_train.unique()) > 2:
+#     a = 1
 
-else:
-    # beeswarm // whole model
-    fig = shap.plots.beeswarm(shap_values, max_display=reduced_features_test_set.shape[1], plot_size=[10, 6], color=plt.get_cmap("cool"), show=False)
-    plt.savefig('Model_shap.png', bbox_inches='tight')
+# else:
+    # import shap
+#     # beeswarm // whole model
+#     fig = shap.plots.beeswarm(shap_values, max_display=reduced_features_test_set.shape[1], plot_size=[10, 6], color=plt.get_cmap("cool"), show=False)
+#     plt.savefig('Model_shap.png', bbox_inches='tight')
 
-    # getting indices of positive and negative predictions
+#     # getting indices of positive and negative predictions
 
-    neg = y_test.loc[y_test == 0]
-    pos = y_test.loc[y_test == 1]
+#     neg = y_test.loc[y_test == 0]
+#     pos = y_test.loc[y_test == 1]
 
-    neg_list = neg.index
-    pos_list = pos.index
+#     neg_list = neg.index
+#     pos_list = pos.index
 
-    neg_idx = random.choice(neg_list)
-    pos_idx = random.choice(pos_list)
+#     neg_idx = random.choice(neg_list)
+#     pos_idx = random.choice(pos_list)
 
-    neg_idx = y_test.index.get_loc(neg_idx)
-    pos_idx = y_test.index.get_loc(pos_idx)
+#     neg_idx = y_test.index.get_loc(neg_idx)
+#     pos_idx = y_test.index.get_loc(pos_idx)
 
-    # negative plot
-    fig, ax = plt.subplots()
+#     # negative plot
+#     fig, ax = plt.subplots()
 
-    shap.plots.waterfall(shap_values[neg_idx], max_display=10, show=False)
-    fig.set_size_inches(10, 6)
-    fig = plt.gcf()
-    fig.tight_layout()
-    fig.savefig(str(path_to_save) + '/SHAP-figures/Negative_patient_shap.png', bbox_inches='tight')
+#     shap.plots.waterfall(shap_values[neg_idx], max_display=10, show=False)
+#     fig.set_size_inches(10, 6)
+#     fig = plt.gcf()
+#     fig.tight_layout()
+#     fig.savefig(str(path_to_save) + '/SHAP-figures/Negative_patient_shap.png', bbox_inches='tight')
 
-    plt.close(fig)
+#     plt.close(fig)
 
-    # positive plot
-    fig, ax = plt.subplots()
+#     # positive plot
+#     fig, ax = plt.subplots()
 
-    shap.plots.waterfall(shap_values[pos_idx], max_display=10, show=False) #reduced_features_test_set.shape[1] for full
-    fig.set_size_inches(10, 6)
-    fig = plt.gcf()
-    fig.tight_layout()
-    fig.savefig(str(path_to_save) + '/SHAP-figures/Positive_patient_shap.png', bbox_inches='tight')
+#     shap.plots.waterfall(shap_values[pos_idx], max_display=10, show=False) #reduced_features_test_set.shape[1] for full
+#     fig.set_size_inches(10, 6)
+#     fig = plt.gcf()
+#     fig.tight_layout()
+#     fig.savefig(str(path_to_save) + '/SHAP-figures/Positive_patient_shap.png', bbox_inches='tight')
 
-    plt.close(fig)
+#     plt.close(fig)
 
-    print('Saved SHAP analysis plots')
+#     print('Saved SHAP analysis plots')
 
 
 print('\nOUTCOME DISTRIBUTION & PERFORMANCE ACROSS TRAIN/TEST: --------------------------------')
@@ -278,18 +280,19 @@ if T_single_rfe is not None:
 print(f'Gridsearch took {T_single_gsearch/ 60:.2f} minutes')
 
 
+
 if is_optimal_features == True:
-    filename_rfecv = path_to_save +'rfecv_radiomics.pkl'
+    filename_rfecv = path_to_save +'/pyradiomics_savedmodels/rfecv_radiomics.pkl'
     pickle.dump(rfecv, open(filename_rfecv, 'wb'))
 else:
-    filename_rfe = path_to_save +'rfe_radiomics.pkl'
+    filename_rfe = path_to_save +'/pyradiomics_savedmodels/rfe_radiomics.pkl'
     pickle.dump(rfe, open(filename_rfe, 'wb'))
 
-filename_gsearch = path_to_save +'gsearch_radiomics.pkl'
+filename_gsearch = path_to_save +'/pyradiomics_savedmodels/gsearch_radiomics.pkl'
 pickle.dump(gsearch, open(filename_gsearch, 'wb'))
-filename_parameters =path_to_save + r"parameters_radiomics.pkl"
+filename_parameters =path_to_save + r"/pyradiomics_savedmodels/parameters_radiomics.pkl"
 pickle.dump([mean_std,selector, to_drop,support],open(filename_parameters, 'wb'))
-filename_proba_train =path_to_save + r"proba_train_radiomics.pkl"
+filename_proba_train =path_to_save + r"/pyradiomics_savedmodels/proba_train_radiomics.pkl"
 pickle.dump(proba_train,open(filename_proba_train, 'wb'))
-filename_proba_test =path_to_save + r"proba_test_radiomics.pkl"
+filename_proba_test =path_to_save + r"/pyradiomics_savedmodels/proba_test_radiomics.pkl"
 pickle.dump(proba_test,open(filename_proba_test, 'wb'))

@@ -13,3 +13,4 @@ testing_figures.ipynb
 *.pkl
 *.png
 deep-learning results
+neuralnet_results.txt
