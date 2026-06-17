@@ -38,6 +38,8 @@ def split_by_class(df, class_col):
 def calc_metrics(df, cat_var, cont_var):
     
     metrics_dict = {}
+
+    df = df.dropna(subset=outcome)
     
     for var in cat_var:
         # calculate % and absolute counts for each metric (count / total)
