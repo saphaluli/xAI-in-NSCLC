@@ -38,7 +38,7 @@ features_df = features_df.drop(columns=['slice_no'])
 #features_df = generate_features_table(features_df)
 
 # merging and cleaning datasets
-mapping = {'I': 0, 'II': 1, 'IIIa':2, 'IIIb':3}
+mapping = {'I': 0, 'II': 0, 'IIIa':1, 'IIIb':1}
 #mapping = {'adenocarcinoma': 0, 'squamous cell carcinoma': 1, 'large cell': 2, 'nos':3 }
 merged_df = merge_and_clean(features_df, clinical_df, mapping, outcome_stage)
 
@@ -82,8 +82,6 @@ print(f'Number of outcome classes: {len(y_train.unique())}')
 
 
 
-
-
 # preprocess training dataset first 
 mean_std, selector, to_drop, decor_dataset_train = preprocessing_train(X_train)
 decor_dataset_test = preprocessing_test(X_test, mean_std, selector, to_drop)
@@ -93,10 +91,12 @@ if len(y_train.unique()) > 2:
     objective = 'multi:softprob'
 else:
     objective = 'binary:logistic'
+    class_weight = len(y_train.loc[y_train == 0]) / len(y_train.loc[y_train == 1])
+    print(f'class_weight: {class_weight}')
 
 #model definition
 model = xgb.XGBClassifier(enable_categorical=True, colsample_bytree=1, eta=0.01, max_depth=4,
-                            objective=objective, eval_metric='logloss', nthread=8, #'multi:softprob'
+                            objective=objective, scale_pos_weight=class_weight,  eval_metric='logloss', nthread=8, #'multi:softprob'
                             gamma=0.5, seed=240)
 
 #measuring time to train one model
@@ -113,11 +113,9 @@ T_single_rfe = None
 if len(y_train.unique()) > 2:
     scoring = 'roc_auc_ovr_weighted'
 else:
-    scoring = 'roc_auc'
+    scoring = 'roc_auc_ovr_weighted'
 
 if is_optimal_features == True:
-
-
 
     print('Performing RFECV')
     rfecv = RFECV(estimator=model, step=1, cv=StratifiedKFold(10),
@@ -195,12 +193,12 @@ if len(y_train.unique()) > 2:
     results_overall = pd.concat([results_train, results_test])
 
 else:
-    proba_train = proba_train[:, 1]
+    temp_proba_train = proba_train[:, 1]
+    temp_proba_test = proba_test[:, 1]
+    optimal_threshold = get_optimal_threshold(y_train, temp_proba_train, pos_label=1)
 
-    optimal_threshold = get_optimal_threshold(y_train, proba_train, pos_label=1)
-
-    df_distributions_train, df_results_train = get_stats_with_ci(y_train, proba_train, 'train', optimal_threshold, nsamples=2000)
-    df_distributions_test, df_results_test = get_stats_with_ci(y_test, proba_test, 'test', optimal_threshold, nsamples=2000)
+    df_distributions_train, df_results_train = get_stats_with_ci(y_train, temp_proba_train, 'train', optimal_threshold, nsamples=2000)
+    df_distributions_test, df_results_test = get_stats_with_ci(y_test, temp_proba_test, 'test', optimal_threshold, nsamples=2000)
 
     results_overall = pd.concat([df_results_train, df_results_test])
 
@@ -273,11 +271,11 @@ print('\nFEATURE SELECTION AND TRAINING TIMES: ---------------------------------
 
 #print(f'Training of singular xgboost model took {T_single_model1:.2f} seconds')
 if T_single_rfecv is not None:
-    print(f'\nRecursive feature elimination with cross validation took {T_single_rfecv / 60:.2f} minutes')
+    print(f'\nRecursive feature elimination with cross validation took {T_single_rfecv / 60:.2f} minutes or {T_single_rfecv:.2f} seconds')
 if T_single_rfe is not None:
-    print(f'\nRecursive feature elimination took {T_single_rfe/ 60:.2f} minutes')
+    print(f'\nRecursive feature elimination took {T_single_rfe/ 60:.2f} minutes or {T_single_rfe:.2f} seconds')
 
-print(f'Gridsearch took {T_single_gsearch/ 60:.2f} minutes')
+print(f'Gridsearch took {T_single_gsearch/ 60:.2f} minutes or {T_single_gsearch:.2f} seconds')
 
 
 
@@ -296,3 +294,7 @@ filename_proba_train =path_to_save + r"/pyradiomics_savedmodels/proba_train_radi
 pickle.dump(proba_train,open(filename_proba_train, 'wb'))
 filename_proba_test =path_to_save + r"/pyradiomics_savedmodels/proba_test_radiomics.pkl"
 pickle.dump(proba_test,open(filename_proba_test, 'wb'))
+filename_y_train =path_to_save + r"/pyradiomics_savedmodels/y_train_radiomics.pkl"
+pickle.dump(y_train,open(filename_y_train, 'wb'))
+filename_y_test =path_to_save + r"/pyradiomics_savedmodels/y_test_radiomics.pkl"
+pickle.dump(y_test,open(filename_y_test, 'wb'))
