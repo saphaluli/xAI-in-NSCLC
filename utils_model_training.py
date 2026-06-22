@@ -153,6 +153,8 @@ def bootstrap(label, pred, f, nsamples=2000):
         stats.append(f(label[random_list], pred[random_list]))
     return stats, np.percentile(stats, (2.5, 97.5))
 
+
+
 def nom_den(label, pred, f):
     if f == sklearn.metrics.accuracy_score:
         n = np.sum(label == pred)
@@ -189,30 +191,6 @@ def get_multiclass_results(y_true, proba, label, average='weighted'):
     df_results.index = [label]
     return df_results
 
-def get_stats_with_ci(y_label, y_pred, label, optimal_threshold, nsamples=2000):
-    ##optimal threshold: reuse the one computed on the train dataset
-    ##label: index of the dataframe, can be "external radiomics results"
-    ##returns a dataframe with auc accuracy precision recall f1-score
-    dict_results = {}
-    dict_distributions = {}
-    dict_distributions["auc"], dict_results["auc"] = get_ci_for_auc(y_label, y_pred)
-    y_pred_binary = (np.array(y_pred) > optimal_threshold).astype(int)
-    dict_distributions["accuracy"], dict_results["accuracy"] = get_ci(y_label, y_pred_binary,
-                                                                    sklearn.metrics.accuracy_score)
-    dict_distributions["precision"], dict_results["precision"] = get_ci(y_label, y_pred_binary,
-                                                                        sklearn.metrics.precision_score)
-    dict_distributions["specificity"], dict_results["specificity"] = get_ci(np.ones(len(y_label)) - y_label,
-                                                                            np.ones(len(y_pred_binary)) - y_pred_binary,
-                                                                            sklearn.metrics.recall_score)
-    dict_distributions["recall"], dict_results["recall"] = get_ci(y_label, y_pred_binary, sklearn.metrics.recall_score)
-    dict_distributions["f1 score"], dict_results["f1 score"] = get_ci(y_label, y_pred_binary, sklearn.metrics.f1_score)
-    df_results = pd.DataFrame.from_dict(dict_results)
-    df_results = df_results.reset_index(drop=True)
-    df_results.index = [label]
-    df_distributions = pd.DataFrame.from_dict(dict_distributions)
-    df_distributions = df_distributions.reset_index(drop=True)
-    return df_distributions, df_results
-
 def get_ci(label, pred, f):
     stats, ci = bootstrap(label, pred, f)
     n, d = nom_den(label, pred, f)
@@ -238,3 +216,27 @@ def get_ci_for_auc(label, pred, nsamples=2000):
     ci_auc = np.percentile(auc_values, (2.5, 97.5))
     fpr, tpr, thresholds = sklearn.metrics.roc_curve(label, pred)
     return auc_values, ["%0.2f CI [%0.2f,%0.2f]" % (sklearn.metrics.auc(fpr, tpr), ci_auc[0], ci_auc[1])]
+
+def get_stats_with_ci(y_label, y_pred, label, optimal_threshold, nsamples=2000):
+    ##optimal threshold: reuse the one computed on the train dataset
+    ##label: index of the dataframe, can be "external radiomics results"
+    ##returns a dataframe with auc accuracy precision recall f1-score
+    dict_results = {}
+    dict_distributions = {}
+    dict_distributions["auc"], dict_results["auc"] = get_ci_for_auc(y_label, y_pred)
+    y_pred_binary = (np.array(y_pred) > optimal_threshold).astype(int)
+    dict_distributions["accuracy"], dict_results["accuracy"] = get_ci(y_label, y_pred_binary,
+                                                                    sklearn.metrics.accuracy_score)
+    dict_distributions["precision"], dict_results["precision"] = get_ci(y_label, y_pred_binary,
+                                                                        sklearn.metrics.precision_score)
+    dict_distributions["specificity"], dict_results["specificity"] = get_ci(np.ones(len(y_label)) - y_label,
+                                                                            np.ones(len(y_pred_binary)) - y_pred_binary,
+                                                                            sklearn.metrics.recall_score)
+    dict_distributions["recall"], dict_results["recall"] = get_ci(y_label, y_pred_binary, sklearn.metrics.recall_score)
+    dict_distributions["f1 score"], dict_results["f1 score"] = get_ci(y_label, y_pred_binary, sklearn.metrics.f1_score)
+    df_results = pd.DataFrame.from_dict(dict_results)
+    df_results = df_results.reset_index(drop=True)
+    df_results.index = [label]
+    df_distributions = pd.DataFrame.from_dict(dict_distributions)
+    df_distributions = df_distributions.reset_index(drop=True)
+    return df_distributions, df_results
