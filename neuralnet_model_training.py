@@ -21,6 +21,7 @@ import pydicom
 import random
 
 from sklearn.metrics import auc, f1_score, roc_curve, recall_score, precision_score, accuracy_score, confusion_matrix
+from sklearn.utils.class_weight import compute_class_weight
 from sklearn import metrics
 from sklearn.model_selection import train_test_split
 from keras.preprocessing import image
@@ -45,12 +46,12 @@ path_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/deeplearning_pa
 clinical_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics-Lung1.clinical-version3-Oct-2019.csv'))
 path_to_save = os.path.expanduser('~/project/xAI-in-NSCLC')
 
-savingPath = os.path.expanduser('~/project/xAI-in-NSCLC/deep-learning results/temporaryWeights.weights.h5')
-checkpoint_path = os.path.expanduser('~/project/xAI-in-NSCLC/deep-learning results/Checkpoint_temporaryWeights.weights.h5')
+savingPath = os.path.expanduser('~/project/xAI-in-NSCLC/deep-learning results/Improved_temporaryWeights.weights.h5')
+checkpoint_path = os.path.expanduser('~/project/xAI-in-NSCLC/deep-learning results/Improved_Checkpoint_temporaryWeights.weights.h5')
 checkpoint_dir = os.path.dirname(checkpoint_path)
 print(checkpoint_path)
 
-mapping = {'I': 0, 'II': 1, 'IIIa':2, 'IIIb':2}
+mapping = {'I': 0, 'II': 0, 'IIIa':1, 'IIIb':1}
 path_df = path_df.dropna(subset=[outcome])
 path_df[outcome] = path_df[outcome].map(mapping)
 print(f'Outcomes after mapping: {path_df[outcome].unique()}')
@@ -63,7 +64,7 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.3, random_state=240, stratify=y)
 
 
-# save patient IDs for deep learning test train split later
+# save patient IDs for test train split later
 train_labels = X_train.unique()
 test_labels = X_test.unique()
 
@@ -85,17 +86,32 @@ print(check_data_leakage(X_train, X_test))
 print('TRAINING SET DISTRIBUTION: -------------------')
 print(f'\nStage I: {len(y_train.loc[y_train == 0])} images ({(len(y_train.loc[y_train == 0])/len(y_train))*100:.1f}%)')
 print(f'Stage II: {len(y_train.loc[y_train == 1])} images ({(len(y_train.loc[y_train == 1])/len(y_train))*100:.1f}%)')
-print(f'Stage III: {len(y_train.loc[y_train == 2])} images ({(len(y_train.loc[y_train == 2])/len(y_train))*100:.1f}%)')
+print(f'Stage IIIa: {len(y_train.loc[y_train == 2])} images ({(len(y_train.loc[y_train == 2])/len(y_train))*100:.1f}%)')
+print(f'Stage IIIb: {len(y_train.loc[y_train == 3])} images ({(len(y_train.loc[y_train == 3])/len(y_train))*100:.1f}%)')
 
 print('\nTESTING SET DISTRIBUTION: --------------------')
 print(f'\nStage I: {len(y_test.loc[y_test == 0])} images ({(len(y_test.loc[y_test == 0])/len(y_test))*100:.1f}%)')
 print(f'Stage II: {len(y_test.loc[y_test == 1])} images ({(len(y_test.loc[y_test == 1])/len(y_test))*100:.1f}%)')
-print(f'Stage III: {len(y_test.loc[y_test == 2])} images ({(len(y_test.loc[y_test == 2])/len(y_test))*100:.1f}%)')
+print(f'Stage IIIa: {len(y_test.loc[y_test == 2])} images ({(len(y_test.loc[y_test == 2])/len(y_test))*100:.1f}%)')
+print(f'Stage IIIb: {len(y_test.loc[y_test == 3])} images ({(len(y_test.loc[y_test == 3])/len(y_test))*100:.1f}%)')
 
 #Converting to onehot encoding, since differences between outcome levels are not linear
 
-y_train = tf.keras.ops.one_hot(y_train, 3, axis=-1, dtype=None, sparse=False)
-y_test = tf.keras.ops.one_hot(y_test, 3, axis=-1, dtype=None, sparse=False)
+# y_train = tf.keras.ops.one_hot(y_train, 4, axis=-1, dtype=None, sparse=False)
+# y_test = tf.keras.ops.one_hot(y_test, 4, axis=-1, dtype=None, sparse=False)
+
+# calculating class weights
+
+# Convert one-hot to class
+# y_train_labels = tf.argmax(y_train, axis=1).numpy()
+
+class_weights = compute_class_weight(
+    class_weight='balanced',
+    classes=np.unique(y_train),
+    y=y_train
+)
+class_weights = dict(enumerate(class_weights))
+print(class_weights)
 
 train_datagen = ImageDataGenerator(
     rescale=1.0 / 255.0,
@@ -153,14 +169,26 @@ last_layer1 = pre_trained_model1.get_layer('mixed10')
 print(f'last layer output shape: {last_layer1.output.shape}')
 last_output1 = last_layer1.output
 
-x = layers.Flatten()(last_output1)
-x = layers.Dense(2048, activation='relu')(x)
-x = layers.Dense(1024, activation='relu')(x)
-x = layers.Dense(512, activation='relu')(x)
-x = layers.Dense(256, activation='relu')(x)
-x = layers.Dense(128, activation='relu')(x)
-x = layers.Dense(32, activation='relu')(x)
-x = layers.Dense(3, activation='softmax')(x) # originally: x = layers.Dense(1)(x)
+
+# changed to reduce parameters
+# x = layers.GlobalAveragePooling2D()(last_output1)
+# x = layers.Dense(256, activation='relu')(x)
+# x = layers.Dropout(0.3)(x)
+# x = layers.Dense(4, activation='softmax')(x)
+
+x = GlobalAveragePooling2D()(last_output1)
+x = Flatten()(x)
+x = Dense(1, activation='sigmoid')(x)
+
+
+# x = layers.Flatten()(last_output1)
+# x = layers.Dense(2048, activation='relu')(x)
+# x = layers.Dense(1024, activation='relu')(x)
+# x = layers.Dense(512, activation='relu')(x)
+# x = layers.Dense(256, activation='relu')(x)
+# x = layers.Dense(128, activation='relu')(x)
+# x = layers.Dense(32, activation='relu')(x)
+# x = layers.Dense(3, activation='softmax')(x) # originally: x = layers.Dense(1)(x)
 # x = layers.Activation(tf.nn.sigmoid)(x)
 
 model1 = Model(pre_trained_model1.input, x)
@@ -170,7 +198,7 @@ model1 = Model(pre_trained_model1.input, x)
 
 cp_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path, save_weights_only=True, save_best_only=True, verbose= 1)
 
-model1.compile(optimizer=tf.keras.optimizers.Adam(learning_rate= 0.001), loss='categorical_crossentropy', metrics=[tf.keras.metrics.CategoricalAccuracy(name='categorical_accuracy'),
+model1.compile(optimizer=tf.keras.optimizers.Adam(learning_rate= 0.001), loss='binary_crossentropy', metrics=[tf.keras.metrics.BinaryAccuracy(name='binary_accuracy'),
                         tf.keras.metrics.Precision(name='Precision'),
                         tf.keras.metrics.Recall(name='Recall'),
                         tf.keras.metrics.TruePositives(name='TP'),
@@ -183,9 +211,20 @@ model1.compile(optimizer=tf.keras.optimizers.Adam(learning_rate= 0.001), loss='c
 start = time.time()
 history = model1.fit(train_generator, epochs=20, validation_data=(test_images, y_test),
             verbose = 2,
+            class_weight = class_weights,
             callbacks = [cp_callback])
 T_single = time.time() - start
 
+print('Finished training model.')
+print(f'Model training took: {T_single / 60 /60:.2f} hours ({T_single / 60:.2f} minutes)')
+print(f'Approx. {T_single/60 /20:2f} minutes per epoch, which is {T_single/20:2f} seconds')
+
+predictions = model1.predict(test_images)
+y_pred = tf.argmax(predictions, axis=1)
+y_true = tf.argmax(y_test, axis=1)
+
+from sklearn.metrics import classification_report
+print(classification_report(y_true, y_pred, sample_weight=class_weights, digits=2))
 
 # yeahhh I'm not sure whether this iwll imporve that much... Maybe subsample only a few patients per sample for the full dataset? Like 4 slices?
 loss = history.history['loss']
@@ -203,7 +242,3 @@ plt.xticks(epochs)  # force integer ticks
 plt.legend()
 plt.grid(True)
 fig.savefig(path_to_save + 'neural_net_loss.png')
-
-print('Finished training model.')
-print(f'Model training took: {T_single / 60 /60:.2f} hours or (not and) {T_single / 60:.2f} minutes')
-print(f'Approx. {T_single/60 /20:2f} minutes per epoch, which is {T_single/20:2f} seconds')
