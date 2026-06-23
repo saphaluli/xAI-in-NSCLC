@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 import xgboost as xgb
 import sklearn
+import shap
 import matplotlib.pyplot as plt
 from sklearn.feature_selection import RFE, RFECV
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
@@ -31,6 +32,8 @@ path_to_save = os.path.expanduser('~/project/xAI-in-NSCLC')
 
 #outcome_stage = 'Histology'
 outcome_stage = 'Overall.Stage'
+# seed
+seed = 204
 
 #generating per-patient statistics
 
@@ -45,7 +48,7 @@ merged_df = merge_and_clean(features_df, clinical_df, mapping, outcome_stage)
 
 # only extract one slice per patient ID
 if is_single_slice == True:
-    merged_df = merged_df.groupby(by='PatientID').sample(n=1, random_state=240).reset_index(drop=True)
+    merged_df = merged_df.groupby(by='PatientID').sample(n=1, random_state=seed).reset_index(drop=True)
 
 
 if is_bypatient == True:
@@ -54,7 +57,7 @@ if is_bypatient == True:
     X = temp_df['PatientID']
     y = temp_df[outcome_stage]
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=240, stratify=y)
+        X, y, test_size=0.3, random_state=seed, stratify=y)
 
     # save patient IDs for deep learning test train split later
     train_labels = X_train.unique()
@@ -76,7 +79,7 @@ else:
     X = merged_df.drop(columns=['PatientID', outcome_stage])
     y = merged_df[outcome_stage]
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=310, stratify=y)
+        X, y, test_size=0.3, random_state=seed, stratify=y)
 
 print(f'Number of outcome classes: {len(y_train.unique())}')
 
@@ -97,7 +100,7 @@ else:
 #model definition
 model = xgb.XGBClassifier(enable_categorical=True, colsample_bytree=1, eta=0.01, max_depth=4,
                             objective=objective, scale_pos_weight=class_weight,  eval_metric='logloss', nthread=8, #'multi:softprob'
-                            gamma=0.5, seed=240)
+                            gamma=0.5, seed=seed)
 
 #measuring time to train one model
 #start_model1 = time.time()
@@ -110,10 +113,7 @@ min_features_to_select = 1
 T_single_rfecv = None
 T_single_rfe = None
 
-if len(y_train.unique()) > 2:
-    scoring = 'roc_auc_ovr_weighted'
-else:
-    scoring = 'roc_auc_ovr_weighted'
+scoring = 'roc_auc'#_ovr_weighted'
 
 if is_optimal_features == True:
 
@@ -143,9 +143,8 @@ if is_optimal_features == True:
     ax.set_title('Results of RFECV cross validation')
     ax.legend()
     fig.savefig(path_to_save + r'/RFECV_results.png')
-
-
-#todo: print out cross validation outcome
+    
+    plt.close(fig)
 
 else:
     print('Performing RFE')
@@ -170,7 +169,7 @@ param_test_xgb = {
         'n_estimators': [200, 300, 400, 500], #int(x) for x in np.linspace(start=200, stop=400, num=100)
     }
 
-kfold = StratifiedKFold(n_splits=10, random_state=240, shuffle=True) #increase this back to 10 ?
+kfold = StratifiedKFold(n_splits=10, random_state=seed, shuffle=True) #increase this back to 10 ?
 gsearch = GridSearchCV(model, param_grid=param_test_xgb, scoring=scoring, n_jobs=4, cv=kfold, verbose=1) #'roc_auc_ovr_weighted'
 
 #measure time for gsearch
@@ -204,55 +203,55 @@ else:
 
 #SHAP explanation 
 
-# explainer = shap.TreeExplainer(best_estimator)
-# shap_values = explainer(reduced_features_test_set)
+explainer = shap.TreeExplainer(best_estimator)
+shap_values = explainer(reduced_features_test_set)
 
-# if len(y_train.unique()) > 2:
-#     a = 1
+if len(y_train.unique()) > 2:
+    print('No multiclass SHAP implemented')
 
-# else:
-    # import shap
-#     # beeswarm // whole model
-#     fig = shap.plots.beeswarm(shap_values, max_display=reduced_features_test_set.shape[1], plot_size=[10, 6], color=plt.get_cmap("cool"), show=False)
-#     plt.savefig('Model_shap.png', bbox_inches='tight')
+else:
+    import shap
+    # beeswarm // whole model
+    fig = shap.plots.beeswarm(shap_values, max_display=reduced_features_test_set.shape[1], plot_size=[10, 6], show=False)
+    plt.savefig('Model_shap.png', bbox_inches='tight')
 
-#     # getting indices of positive and negative predictions
+    # getting indices of positive and negative predictions
 
-#     neg = y_test.loc[y_test == 0]
-#     pos = y_test.loc[y_test == 1]
+    neg = y_test.loc[y_test == 0]
+    pos = y_test.loc[y_test == 1]
 
-#     neg_list = neg.index
-#     pos_list = pos.index
+    neg_list = neg.index
+    pos_list = pos.index
 
-#     neg_idx = random.choice(neg_list)
-#     pos_idx = random.choice(pos_list)
+    neg_idx = random.choice(neg_list)
+    pos_idx = random.choice(pos_list)
 
-#     neg_idx = y_test.index.get_loc(neg_idx)
-#     pos_idx = y_test.index.get_loc(pos_idx)
+    neg_idx = y_test.index.get_loc(neg_idx)
+    pos_idx = y_test.index.get_loc(pos_idx)
 
-#     # negative plot
-#     fig, ax = plt.subplots()
+    # negative plot
+    fig, ax = plt.subplots()
 
-#     shap.plots.waterfall(shap_values[neg_idx], max_display=10, show=False)
-#     fig.set_size_inches(10, 6)
-#     fig = plt.gcf()
-#     fig.tight_layout()
-#     fig.savefig(str(path_to_save) + '/SHAP-figures/Negative_patient_shap.png', bbox_inches='tight')
+    shap.plots.waterfall(shap_values[neg_idx], max_display=10, show=False)
+    fig.set_size_inches(10, 6)
+    fig = plt.gcf()
+    fig.tight_layout()
+    fig.savefig(str(path_to_save) + '/SHAP-figures/Negative_patient_shap.png', bbox_inches='tight')
 
-#     plt.close(fig)
+    plt.close(fig)
 
-#     # positive plot
-#     fig, ax = plt.subplots()
+    # positive plot
+    fig, ax = plt.subplots()
 
-#     shap.plots.waterfall(shap_values[pos_idx], max_display=10, show=False) #reduced_features_test_set.shape[1] for full
-#     fig.set_size_inches(10, 6)
-#     fig = plt.gcf()
-#     fig.tight_layout()
-#     fig.savefig(str(path_to_save) + '/SHAP-figures/Positive_patient_shap.png', bbox_inches='tight')
+    shap.plots.waterfall(shap_values[pos_idx], max_display=10, show=False) #reduced_features_test_set.shape[1] for full
+    fig.set_size_inches(10, 6)
+    fig = plt.gcf()
+    fig.tight_layout()
+    fig.savefig(str(path_to_save) + '/SHAP-figures/Positive_patient_shap.png', bbox_inches='tight')
 
-#     plt.close(fig)
+    plt.close(fig)
 
-#     print('Saved SHAP analysis plots')
+    print('Saved SHAP analysis plots')
 
 
 print('\nOUTCOME DISTRIBUTION & PERFORMANCE ACROSS TRAIN/TEST: --------------------------------')

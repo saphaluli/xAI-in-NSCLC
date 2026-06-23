@@ -130,6 +130,7 @@ def get_optimal_threshold(true_outcome, predictions, pos_label=1):
     fpr, tpr, thresholds = sklearn.metrics.roc_curve(true_outcome, predictions, pos_label=pos_label)
     optimal_idx = np.argmax(tpr - fpr)
     optimal_threshold = thresholds[optimal_idx]
+    print(f'Youden\'s index: {optimal_threshold}')
     return optimal_threshold
 
 
