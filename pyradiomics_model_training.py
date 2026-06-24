@@ -143,7 +143,6 @@ if is_optimal_features == True:
     ax.set_title('Results of RFECV cross validation')
     ax.legend()
     fig.savefig(path_to_save + r'/RFECV_results.png')
-    
     plt.close(fig)
 
 else:
@@ -213,7 +212,7 @@ else:
     import shap
     # beeswarm // whole model
     fig = shap.plots.beeswarm(shap_values, max_display=reduced_features_test_set.shape[1], plot_size=[10, 6], show=False)
-    plt.savefig('Model_shap.png', bbox_inches='tight')
+    plt.savefig(str(path_to_save) + '/SHAP-figures/model_shap.png', bbox_inches='tight')
 
     # getting indices of positive and negative predictions
 
