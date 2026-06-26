@@ -9,7 +9,7 @@ import argparse
 import numpy as np
 import xgboost as xgb
 import sklearn
-import shap
+#import shap
 import matplotlib.pyplot as plt
 from sklearn.feature_selection import RFE, RFECV
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
@@ -209,7 +209,6 @@ if len(y_train.unique()) > 2:
     print('No multiclass SHAP implemented')
 
 else:
-    import shap
     # beeswarm // whole model
     fig = shap.plots.beeswarm(shap_values, max_display=reduced_features_test_set.shape[1], plot_size=[10, 6], show=False)
     plt.savefig(str(path_to_save) + '/SHAP-figures/model_shap.png', bbox_inches='tight')

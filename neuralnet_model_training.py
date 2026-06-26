@@ -97,18 +97,19 @@ print(f'Stage IIIb: {len(y_test.loc[y_test == 3])} images ({(len(y_test.loc[y_te
 
 #Converting to onehot encoding, since differences between outcome levels are not linear
 
-# y_train = tf.keras.ops.one_hot(y_train, 4, axis=-1, dtype=None, sparse=False)
-# y_test = tf.keras.ops.one_hot(y_test, 4, axis=-1, dtype=None, sparse=False)
+y_train = tf.keras.ops.one_hot(y_train, 2, axis=-1, dtype=None, sparse=False)
+y_test = tf.keras.ops.one_hot(y_test, 2, axis=-1, dtype=None, sparse=False)
 
-# calculating class weights
 
 # Convert one-hot to class
-# y_train_labels = tf.argmax(y_train, axis=1).numpy()
+y_train_labels = tf.argmax(y_train, axis=1).numpy()
 
+
+# calculating class weights
 class_weights = compute_class_weight(
     class_weight='balanced',
-    classes=np.unique(y_train),
-    y=y_train
+    classes=np.unique(y_train_labels),
+    y=y_train_labels
 )
 class_weights = dict(enumerate(class_weights))
 print(class_weights)
@@ -178,7 +179,7 @@ last_output1 = last_layer1.output
 
 x = GlobalAveragePooling2D()(last_output1)
 x = Flatten()(x)
-x = Dense(1, activation='sigmoid')(x)
+x = Dense(2, activation='softmax')(x)
 
 
 # x = layers.Flatten()(last_output1)
@@ -198,7 +199,7 @@ model1 = Model(pre_trained_model1.input, x)
 
 cp_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path, save_weights_only=True, save_best_only=True, verbose= 1)
 
-model1.compile(optimizer=tf.keras.optimizers.Adam(learning_rate= 0.001), loss='binary_crossentropy', metrics=[tf.keras.metrics.BinaryAccuracy(name='binary_accuracy'),
+model1.compile(optimizer=tf.keras.optimizers.Adam(learning_rate= 0.001), loss='categorical_crossentropy', metrics=[tf.keras.metrics.CategoricalAccuracy(name='categorical_accuracy'),
                         tf.keras.metrics.Precision(name='Precision'),
                         tf.keras.metrics.Recall(name='Recall'),
                         tf.keras.metrics.TruePositives(name='TP'),
@@ -206,7 +207,6 @@ model1.compile(optimizer=tf.keras.optimizers.Adam(learning_rate= 0.001), loss='b
                         tf.keras.metrics.FalseNegatives(name='FN'),
                         tf.keras.metrics.FalsePositives(name='FP'),
                         tf.keras.metrics.AUC(name='AUC')])
-
 
 start = time.time()
 history = model1.fit(train_generator, epochs=20, validation_data=(test_images, y_test),
