@@ -63,6 +63,11 @@ if is_bypatient == True:
     train_labels = X_train.unique()
     test_labels = X_test.unique()
 
+    filename_train_labels =path_to_save + r"/pyradiomics_savedmodels/train_labels.pkl"
+    pickle.dump(train_labels ,open(filename_train_labels, 'wb'))
+    filename_test_labels =path_to_save + r"/pyradiomics_savedmodels/test_labels.pkl"
+    pickle.dump(test_labels ,open(filename_test_labels, 'wb'))       
+
 
     # create test train split dfs for training
     X_train = merged_df.loc[merged_df['PatientID'].isin(train_labels)]
@@ -102,10 +107,6 @@ model = xgb.XGBClassifier(enable_categorical=True, colsample_bytree=1, eta=0.01,
                             objective=objective, scale_pos_weight=class_weight,  eval_metric='logloss', nthread=8, #'multi:softprob'
                             gamma=0.5, seed=seed)
 
-#measuring time to train one model
-#start_model1 = time.time()
-#model.fit(X_train, y_train)
-#T_single_model1 = time.time() - start_model1
 
 # recursive feature elimination with cross validation:
 min_features_to_select = 1
@@ -158,6 +159,9 @@ filtered_col = np.extract(support, np.array(decor_dataset_train.columns))
 reduced_features_train_set = decor_dataset_train[filtered_col]
 reduced_features_test_set = decor_dataset_test[filtered_col]
 
+filename_reduced_test =path_to_save + r"/pyradiomics_savedmodels/reduced_features_test.pkl"
+pickle.dump(reduced_features_test_set ,open(filename_reduced_test, 'wb'))
+
 
 # parameters for XGBoost model
 
@@ -194,62 +198,75 @@ else:
     temp_proba_train = proba_train[:, 1]
     temp_proba_test = proba_test[:, 1]
     optimal_threshold = get_optimal_threshold(y_train, temp_proba_train, pos_label=1)
+    print(f'OPTIMAL THRESHOLD: {optimal_threshold}')
 
     df_distributions_train, df_results_train = get_stats_with_ci(y_train, temp_proba_train, 'train', optimal_threshold, nsamples=2000)
     df_distributions_test, df_results_test = get_stats_with_ci(y_test, temp_proba_test, 'test', optimal_threshold, nsamples=2000)
 
     results_overall = pd.concat([df_results_train, df_results_test])
 
+
+model = xgb.XGBClassifier(enable_categorical=True, colsample_bytree=1, eta=0.01, max_depth=5,
+                            objective=objective, min_child_weight=1, n_estimators=500, scale_pos_weight=class_weight,  eval_metric='logloss', nthread=32, #'multi:softprob'
+                            gamma=0.4, seed=seed)
+
+#measuring time to train one model
+start_model1 = time.time()
+model.fit(X_train, y_train)
+T_single_model1 = time.time() - start_model1
+
+print(f'Training of optimal model took: {T_single_model1:.2f} seconds')
+
 #SHAP explanation 
 
-explainer = shap.TreeExplainer(best_estimator)
-shap_values = explainer(reduced_features_test_set)
+# explainer = shap.TreeExplainer(best_estimator)
+# shap_values = explainer(reduced_features_test_set)
 
-if len(y_train.unique()) > 2:
-    print('No multiclass SHAP implemented')
+# if len(y_train.unique()) > 2:
+#     print('No multiclass SHAP implemented')
 
-else:
-    # beeswarm // whole model
-    fig = shap.plots.beeswarm(shap_values, max_display=reduced_features_test_set.shape[1], plot_size=[10, 6], show=False)
-    plt.savefig(str(path_to_save) + '/SHAP-figures/model_shap.png', bbox_inches='tight')
+# # else:
+#     # beeswarm // whole model
+#     fig = shap.plots.beeswarm(shap_values, max_display=reduced_features_test_set.shape[1], plot_size=[10, 6], show=False)
+#     plt.savefig(str(path_to_save) + '/SHAP-figures/model_shap.png', bbox_inches='tight')
 
-    # getting indices of positive and negative predictions
+#     # getting indices of positive and negative predictions
 
-    neg = y_test.loc[y_test == 0]
-    pos = y_test.loc[y_test == 1]
+#     neg = y_test.loc[y_test == 0]
+#     pos = y_test.loc[y_test == 1]
 
-    neg_list = neg.index
-    pos_list = pos.index
+#     neg_list = neg.index
+#     pos_list = pos.index
 
-    neg_idx = random.choice(neg_list)
-    pos_idx = random.choice(pos_list)
+#     neg_idx = random.choice(neg_list)
+#     pos_idx = random.choice(pos_list)
 
-    neg_idx = y_test.index.get_loc(neg_idx)
-    pos_idx = y_test.index.get_loc(pos_idx)
+#     neg_idx = y_test.index.get_loc(neg_idx)
+#     pos_idx = y_test.index.get_loc(pos_idx)
 
-    # negative plot
-    fig, ax = plt.subplots()
+#     # negative plot
+#     fig, ax = plt.subplots()
 
-    shap.plots.waterfall(shap_values[neg_idx], max_display=10, show=False)
-    fig.set_size_inches(10, 6)
-    fig = plt.gcf()
-    fig.tight_layout()
-    fig.savefig(str(path_to_save) + '/SHAP-figures/Negative_patient_shap.png', bbox_inches='tight')
+#     shap.plots.waterfall(shap_values[neg_idx], max_display=10, show=False)
+#     fig.set_size_inches(10, 6)
+#     fig = plt.gcf()
+#     fig.tight_layout()
+#     fig.savefig(str(path_to_save) + '/SHAP-figures/Negative_patient_shap.png', bbox_inches='tight')
 
-    plt.close(fig)
+#     plt.close(fig)
 
-    # positive plot
-    fig, ax = plt.subplots()
+#     # positive plot
+#     fig, ax = plt.subplots()
 
-    shap.plots.waterfall(shap_values[pos_idx], max_display=10, show=False) #reduced_features_test_set.shape[1] for full
-    fig.set_size_inches(10, 6)
-    fig = plt.gcf()
-    fig.tight_layout()
-    fig.savefig(str(path_to_save) + '/SHAP-figures/Positive_patient_shap.png', bbox_inches='tight')
+#     shap.plots.waterfall(shap_values[pos_idx], max_display=10, show=False) #reduced_features_test_set.shape[1] for full
+#     fig.set_size_inches(10, 6)
+#     fig = plt.gcf()
+#     fig.tight_layout()
+#     fig.savefig(str(path_to_save) + '/SHAP-figures/Positive_patient_shap.png', bbox_inches='tight')
 
-    plt.close(fig)
+#     plt.close(fig)
 
-    print('Saved SHAP analysis plots')
+#     print('Saved SHAP analysis plots')
 
 
 print('\nOUTCOME DISTRIBUTION & PERFORMANCE ACROSS TRAIN/TEST: --------------------------------')

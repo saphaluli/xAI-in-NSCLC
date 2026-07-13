@@ -35,11 +35,11 @@ def split_by_class(df, class_col):
 
     return df_dict
 
-def calc_metrics(df, cat_var, cont_var):
+from scipy.stats import ttest_ind, chi2_contingency, fisher_exact
+
+def calc_metrics(df, cat_var, cont_var, outcome):
     
     metrics_dict = {}
-
-    df = df.dropna(subset=outcome)
     
     for var in cat_var:
         # calculate % and absolute counts for each metric (count / total)
@@ -58,8 +58,15 @@ def calc_metrics(df, cat_var, cont_var):
             pc = (count / total) * 100
 
             #Chi square?
+            contingency = pd.crosstab(df[var], df[outcome])
 
-            var_metrics.append((('{}').format(cls), ('{}% ({} / {})').format(round(pc, 2), count, total)))
+            if contingency.shape[1] != 2:
+                p = np.nan
+            else:
+                chi2, p, dof, exp = chi2_contingency(contingency)
+
+
+            var_metrics.append((('{}').format(cls), ('{}% ({} / {})').format(round(pc, 2), count, total), p))
 
         metrics_dict[var] = var_metrics
 
@@ -69,8 +76,17 @@ def calc_metrics(df, cat_var, cont_var):
         mean = df[var].mean()
         std = df[var].std()
 
-        var_metrics = [(None, ('{} ± {}'.format(round(mean, 2), round(std, 2))))]
+        groups = df[outcome].dropna().unique()
 
+        if len(groups) != 2:
+            p = np.nan
+        else:
+            g1 = df[df[outcome] == groups[0]][var].dropna()
+            g2 = df[df[outcome] == groups[1]][var].dropna()
+            t, p = ttest_ind(g1, g2, equal_var=False)
+
+
+        var_metrics = [(None, ('{} ± {}'.format(round(mean, 2), round(std, 2))), p)]
         metrics_dict[var] = var_metrics
 
     return metrics_dict   
@@ -78,8 +94,18 @@ def calc_metrics(df, cat_var, cont_var):
 def metrics_to_df(metrics_dict, column_name):
     rows = []
     for variable, entries in metrics_dict.items():
-        for level, metric in entries:
-            rows.append((variable, level, metric))
+        for level, metric, p in entries:
+            rows.append((variable, level, metric, p))
+
+    df = pd.DataFrame(rows, columns=["variable", "level", column_name, "p_value"])
+    return df.set_index(["variable", "level"])
+
+
+# def metrics_to_df(metrics_dict, column_name):
+#     rows = []
+#     for variable, entries in metrics_dict.items():
+#         for level, metric, pvalue in entries:
+#             rows.append((variable, level, metric, pvalue))
     
-    df = pd.DataFrame(rows, columns=["variable", "level", column_name])
-    return df.set_index(["variable", "level"])   
+#     df = pd.DataFrame(rows, columns=["variable", "level", column_name, "pvalue"])
+#     return df.set_index(["variable", "level"])

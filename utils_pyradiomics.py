@@ -45,14 +45,14 @@ def create_path_df(general_dir):
 
             if ct_series is not None and seg_series is not None:
                 path_records.append({
-                    'scan_id': scan_id,
+                    'PatientID': scan_id,
                     'path_ct': ct_series,
                     'path_mask':seg_series
                 })
             else:
                 print(f"No valid paths for {patient_dir.name}/{study_dir.name}: ct_series={ct_series is not None}, seg_series={seg_series is not None}")
 
-    path_df = pd.DataFrame(path_records, columns=['scan_id', 'path_ct', 'path_mask'])
+    path_df = pd.DataFrame(path_records, columns=['PatientID', 'path_ct', 'path_mask'])
 
     return path_df
 
@@ -128,7 +128,7 @@ def extract_radiomics(path_df):
     extractor = initialize_feature_extractor()
 
     for _, row in tqdm(path_df.iterrows()):
-        scan_id = row['scan_id']
+        scan_id = row['PatientID']
         ct_path = row['path_ct']
         mask_path = row['path_mask']
 

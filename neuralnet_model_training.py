@@ -7,7 +7,6 @@
 
 # imports 
 import tensorflow as tf
-import time
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -19,11 +18,14 @@ import pickle
 import sklearn
 import pydicom
 import random
+from pathlib import Path
+import pydicom_seg as dcmseg
+import SimpleITK as sitk
 
 from sklearn.metrics import auc, f1_score, roc_curve, recall_score, precision_score, accuracy_score, confusion_matrix
-from sklearn.utils.class_weight import compute_class_weight
 from sklearn import metrics
 from sklearn.model_selection import train_test_split
+#from google.colab import files
 from keras.preprocessing import image
 from keras.layers import Activation
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
@@ -36,13 +38,15 @@ from keras.models import load_model
 from tensorflow.keras.preprocessing.image import load_img
 from tensorflow.keras.preprocessing.image import img_to_array, array_to_img
 
-from utils_neuralnet import check_data_leakage, load_and_preprocess_dicom
+from utils_pyradiomics import create_path_df, merge_and_clean
+from utils_neuralnet import read_dicom_scans, find_neoplasm, extract_per_slice, get_cropped_arrays, pad_to_shape
 
 #test train split
 ###### todo: once xgboost is finished, make sure to copy the exact test/train split from there #######
 outcome = 'Overall.Stage'
 
-path_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/deeplearning_path.csv'))
+general_dir = Path(os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics'))
+path_df = create_path_df(general_dir)
 clinical_df = pd.read_csv(os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics-Lung1.clinical-version3-Oct-2019.csv'))
 path_to_save = os.path.expanduser('~/project/xAI-in-NSCLC')
 
@@ -52,6 +56,7 @@ checkpoint_dir = os.path.dirname(checkpoint_path)
 print(checkpoint_path)
 
 mapping = {'I': 0, 'II': 0, 'IIIa':1, 'IIIb':1}
+path_df = merge_and_clean(path_df, clinical_df, mapping, outcome)
 path_df = path_df.dropna(subset=[outcome])
 path_df[outcome] = path_df[outcome].map(mapping)
 print(f'Outcomes after mapping: {path_df[outcome].unique()}')

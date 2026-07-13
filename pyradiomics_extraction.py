@@ -23,7 +23,7 @@ general_dir = Path(os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics'))
 #todo: Add option to provide csv with path?
 
 path_df = create_path_df(general_dir)
-path_df = path_df.sort_values(by='scan_id', ascending=True, ignore_index=True) #make sure to ignore index
+path_df = path_df.sort_values(by='PatientID', ascending=True, ignore_index=True) #make sure to ignore index
 
 print(f'Processing {path_df.shape[0]} scans. Should be: 422')
 start = time.time()

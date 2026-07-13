@@ -36,6 +36,109 @@ def load_and_preprocess_dicom(dcm_path):
     # Could still be improved? Sometimes the image shows the table, sometimes is shifted largely left or right..
     return cropped_image_data
 
+def read_dicom_scans(path_df):
+    seg_reader = dcmseg.SegmentReader()
+    ser_reader = sitk.ImageSeriesReader()
+    scan_id = path_df['PatientID']
+    ct_path = path_df['path_ct']
+    mask_path = path_df['path_mask']
+
+    # read segmentation file, read ct scan as series
+    seg = pydicom.dcmread(list(mask_path.glob('*.dcm'))[0])
+    result_seg = seg_reader.read(seg)
+    dcm_files = ser_reader.GetGDCMSeriesFileNames(str(ct_path))
+    ser_reader.SetFileNames(dcm_files)
+    sitk_dcms = ser_reader.Execute()
+
+    return result_seg, sitk_dcms, scan_id
+
+def find_neoplasm(result_seg, ):
+    seg_infos = result_seg.segment_infos
+    for seg_num, info in seg_infos.items():
+
+        if 'Neoplasm' in info.get('SegmentLabel', ''): #neoplasm label is available in all patients
+            break
+        else:
+            continue
+
+    neo_seg_num = seg_num
+
+    return neo_seg_num
+
+def extract_slice(img, slice_no):
+    size = list(img.GetSize())
+    index = [0, 0, int(slice_no)]
+
+    size[2] = 0  # extract 2D slice
+    return sitk.Extract(img, size, index)
+
+def extract_per_slice(fixed_seg, sitk_dcms, scan_id):
+
+    records = []
+        
+    scan_vol = sitk.GetArrayFromImage(sitk_dcms)              # shape (Z, H, W)
+    seg_vol  = sitk.GetArrayFromImage(fixed_seg)   # shape (Z, H, W)
+
+    for z in range(seg_vol.shape[0]):
+        mask_np = seg_vol[z]   # (H, W)
+        scan_np = scan_vol[z]  # (H, W)
+
+        if np.any(mask_np > 0):
+            ys, xs = np.where(mask_np > 0)
+            ymin, ymax = ys.min(), ys.max()
+            xmin, xmax = xs.min(), xs.max()
+
+            cropped = scan_np[ymin:ymax+1, xmin:xmax+1]
+
+            records.append(cropped)
+
+
+        # ys, xs = np.where(mask_np > 0)
+
+        # ymin, ymax = ys.min(), ys.max()
+        # xmin, xmax = xs.min(), xs.max()
+
+        # cropped_scan = scan_np[ymin:ymax+1, xmin:xmax+1]
+
+
+    return records
+
+def get_cropped_arrays(row):
+    result_seg, sitk_dcms, scan_id = read_dicom_scans(row)
+    neo_seg_num = find_neoplasm(result_seg)
+
+    #neoplasm_segment_img = result_seg.GetSegmentImage(neo_seg_num)
+    neoplasm_segment_img = result_seg.segment_image(neo_seg_num)
+    #neoplasm_segment_img  = sitk.Cast(neoplasm_segment_img, sitk.sitkUInt8)
+    if neoplasm_segment_img.GetSize() != sitk_dcms.GetSize():
+        print(f"Skipping {scan_id} due to size mismatch: seg={neoplasm_segment_img.GetSize()}, ct={sitk_dcms.GetSize()}")
+
+# extract the bounding box of the image
+    else:
+        records = extract_per_slice(neoplasm_segment_img, sitk_dcms, scan_id)
+
+    return records
+
+def pad_to_shape(img, target_shape):
+    h, w = img.shape
+    H, W = target_shape
+
+    pad_h = H - h
+    pad_w = W - w
+
+    # pad equally on both sides
+    pad_top = pad_h // 2
+    pad_bottom = pad_h - pad_top
+    pad_left = pad_w // 2
+    pad_right = pad_w - pad_left
+
+    return np.pad(
+        img,
+        ((pad_top, pad_bottom), (pad_left, pad_right)),
+        mode='constant',
+        constant_values=0
+    )
+
 
 # Grad-CAM
 

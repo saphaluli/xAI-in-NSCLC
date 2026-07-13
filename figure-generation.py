@@ -13,9 +13,9 @@ desired = [
 ]
 
 # insert directories here.
-clinical_dir_path = os.path.expanduser('~/Documents/NSCLC-Radiomics-Lung1.clinical-version3-Oct-2019.csv')
-radiomics_dir_path = os.path.expanduser('~/Documents/GitHub/xAI-in-NSCLC/FULL-radiomics_features_per_slice.csv')
-output_dir = '~/Documents/GitHub/xAI-in-NSCLC/Figures'
+clinical_dir_path = os.path.expanduser('~/project/xAI-in-NSCLC/NSCLC-Radiomics-Lung1.clinical-version3-Oct-2019.csv')
+radiomics_dir_path = os.path.expanduser('~/project/xAI-in-NSCLC/full_radiomics_per_slice.csv')
+output_dir = '~/project/xAI-in-NSCLC/Figures_and_tables'
 
 ### TABLE 1- DESCRIPTIVES FOR 
 
@@ -24,7 +24,9 @@ if 'table_1' in desired:
     df = df.drop(labels='PatientID', axis=1)
     #enter name of outcome column here
     outcome = 'Overall.Stage'
-    df.loc[(df[outcome] == 'IIIa') | (df[outcome] == 'IIIb'), outcome] = 'III'
+    mapping = {'I': 'Low-stage', 'II': 'Low-stage', 'IIIa':'High-stage', 'IIIb': 'High-stage'}
+    df[outcome] = df[outcome].map(mapping)
+    df = df.dropna(subset=outcome)
 
     #Determine all of the variables that exist
     #Determine whether these variables are categorical or continuous
@@ -35,7 +37,7 @@ if 'table_1' in desired:
 
     #Calculate the corresponding metric for each of the
     metrics_dicts = {
-        name: calc_metrics(df, cat_var, cont_var)
+        name: calc_metrics(df, cat_var, cont_var, outcome)
         for name, df in df_dict.items()
     }
 
@@ -43,6 +45,7 @@ if 'table_1' in desired:
         name: metrics_to_df(mdict, column_name=name)
         for name, mdict in metrics_dicts.items()
     }
+
 
     combined = pd.concat(metric_frames.values(), axis=1)
 
